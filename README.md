@@ -100,15 +100,6 @@ Workflow `.github/workflows/crawl.yml`:
 - Cũng chạy được manual qua tab **Actions → Daily News Crawl → Run workflow**
 - Sau khi crawl xong, commit ngược `data/*.jsonl` + `data/*.json` vào repo
 
-**Setup lần đầu:**
-
-```bash
-git init && git branch -M main
-git add . && git commit -m "init: news crawler"
-git remote add origin https://github.com/<user>/<repo>.git
-git push -u origin main
-```
-
 Trên GitHub: **Settings → Actions → General → Workflow permissions** → chọn **Read and write permissions** (để bot commit ngược được).
 
 ## 📝 Schema output (mỗi dòng JSONL)
