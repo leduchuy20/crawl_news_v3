@@ -69,7 +69,7 @@ RSS_FEEDS = [
     "https://vnexpress.net/rss/oto-xe-may.rss",
     "https://vnexpress.net/rss/y-kien.rss",
     # Dân Trí
-    "https://dantri.com.vn/rss/trang-chu.rss",
+    "https://dantri.com.vn/rss/home.rss",
     "https://dantri.com.vn/rss/xa-hoi.rss",
     "https://dantri.com.vn/rss/the-gioi.rss",
     "https://dantri.com.vn/rss/kinh-doanh.rss",

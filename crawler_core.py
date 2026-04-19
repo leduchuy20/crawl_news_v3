@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import os
 import re
+import ssl
 import json
 import glob
 import html
@@ -25,6 +26,7 @@ import random
 import hashlib
 import logging
 import threading
+import urllib.request
 from collections import defaultdict
 from dataclasses import dataclass, asdict, field
 from datetime import datetime, timezone, timedelta
@@ -38,6 +40,37 @@ from dateutil import parser as dateparser
 
 
 VN_TZ = timezone(timedelta(hours=7))
+
+
+# =========================================================================
+# SSL: cho phép legacy renegotiation (nhiều báo VN dùng TLS server cũ,
+# gặp lỗi UNSAFE_LEGACY_RENEGOTIATION_DISABLED trên OpenSSL 3.x / Ubuntu 22.04+)
+# =========================================================================
+
+def _build_legacy_ssl_context() -> ssl.SSLContext:
+    ctx = ssl.create_default_context()
+    # 0x4 = SSL_OP_LEGACY_SERVER_CONNECT; Python 3.12+ có hằng ssl.OP_LEGACY_SERVER_CONNECT
+    ctx.options |= getattr(ssl, "OP_LEGACY_SERVER_CONNECT", 0x4)
+    return ctx
+
+
+# Patch urllib (feedparser.parse dùng urllib internally)
+_urllib_opener = urllib.request.build_opener(
+    urllib.request.HTTPSHandler(context=_build_legacy_ssl_context())
+)
+urllib.request.install_opener(_urllib_opener)
+
+
+class _LegacySSLAdapter(HTTPAdapter):
+    """HTTPAdapter cho requests với SSL context cho phép legacy renegotiation."""
+
+    def init_poolmanager(self, *args, **kwargs):
+        kwargs["ssl_context"] = _build_legacy_ssl_context()
+        return super().init_poolmanager(*args, **kwargs)
+
+    def proxy_manager_for(self, *args, **kwargs):
+        kwargs["ssl_context"] = _build_legacy_ssl_context()
+        return super().proxy_manager_for(*args, **kwargs)
 
 
 # =========================================================================
@@ -280,7 +313,7 @@ class HttpClient:
             respect_retry_after_header=True,
             raise_on_status=False,
         )
-        adapter = HTTPAdapter(max_retries=retry, pool_connections=50, pool_maxsize=50)
+        adapter = _LegacySSLAdapter(max_retries=retry, pool_connections=50, pool_maxsize=50)
         self.session.mount("http://", adapter)
         self.session.mount("https://", adapter)
 
