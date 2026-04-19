@@ -1,0 +1,79 @@
+name: Daily News Crawl
+
+on:
+  schedule:
+    # 10:00 giờ Việt Nam = 03:00 UTC (UTC+7)
+    # Lưu ý: GitHub Actions cron là best-effort, có thể trễ 5-60 phút
+    - cron: "0 3 * * *"
+  workflow_dispatch:
+    inputs:
+      start_date:
+        description: "Start date YYYY-MM-DD (rỗng = 7 ngày trước)"
+        required: false
+        default: ""
+
+permissions:
+  contents: write
+
+concurrency:
+  group: crawl
+  cancel-in-progress: false
+
+jobs:
+  crawl:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+
+    env:
+      PYTHONIOENCODING: utf-8
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          # Fetch full history để push không bị conflict
+          fetch-depth: 0
+          # Dùng PAT hoặc GITHUB_TOKEN default để có thể push
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run crawler pipeline
+        run: |
+          if [ -n "${{ github.event.inputs.start_date }}" ]; then
+            python run_all.py --start "${{ github.event.inputs.start_date }}"
+          else
+            python run_all.py
+          fi
+
+      - name: Commit & push data
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/*.jsonl data/*.json 2>/dev/null || true
+          if git diff --cached --quiet; then
+            echo "No data changes to commit."
+            exit 0
+          fi
+          TS=$(date -u +"%Y-%m-%d %H:%M UTC")
+          git commit -m "chore(data): daily crawl $TS [skip ci]"
+          # Pull rebase phòng trường hợp có commit khác trong lúc chạy
+          git pull --rebase origin ${GITHUB_REF_NAME} || true
+          git push origin HEAD:${GITHUB_REF_NAME}
+
+      - name: Upload logs (artifact, 7 ngày)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: crawl-logs-${{ github.run_id }}
+          path: data/*.log
+          retention-days: 7
