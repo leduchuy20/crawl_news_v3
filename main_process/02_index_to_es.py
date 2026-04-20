@@ -121,7 +121,6 @@ def create_alias(es: Elasticsearch):
             "index": INDEX_NAME,
             "alias": ALIAS_PUBLIC,
             "filter": filter_q,
-            "routing": None
         }
     }]
     es.indices.update_aliases(actions=actions)

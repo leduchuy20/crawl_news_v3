@@ -288,12 +288,13 @@ def demo_kb2_cross_source_coverage(ch: CHClient, days: int = 7):
     """Sự kiện hot: được nhiều nguồn đưa tin trong cùng 1 ngày."""
     print_section(f"KB2.e — Cross-source keyword coverage (last {days}d)")
     t0 = time.time()
+    # Query từ keyword_events (raw) vì daily_keyword_stats không có cột source
     rows = ch.execute(f"""
         SELECT
             keyword,
             uniqExact(source) AS source_count,
-            sum(mention_count) AS total_mentions
-        FROM news.daily_keyword_stats
+            count() AS total_mentions
+        FROM news.keyword_events
         WHERE publish_date >= today() - {days}
         GROUP BY keyword
         HAVING source_count >= 3
