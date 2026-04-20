@@ -1,0 +1,66 @@
+{
+  "settings": {
+    "number_of_shards": 1,
+    "number_of_replicas": 0,
+    "analysis": {
+      "analyzer": {
+        "vi_text": {
+          "type": "custom",
+          "tokenizer": "icu_tokenizer",
+          "filter": ["icu_folding", "lowercase"]
+        },
+        "vi_text_search": {
+          "type": "custom",
+          "tokenizer": "icu_tokenizer",
+          "filter": ["icu_folding", "lowercase"]
+        }
+      }
+    }
+  },
+  "mappings": {
+    "dynamic": "strict",
+    "properties": {
+      "id":                 { "type": "keyword" },
+      "url":                { "type": "keyword" },
+      "title": {
+        "type": "text",
+        "analyzer": "vi_text",
+        "search_analyzer": "vi_text_search",
+        "fields": {
+          "raw": { "type": "keyword", "ignore_above": 512 }
+        }
+      },
+      "content": {
+        "type": "text",
+        "analyzer": "vi_text",
+        "search_analyzer": "vi_text_search"
+      },
+      "published_at":       { "type": "date" },
+      "crawled_at":         { "type": "date" },
+      "publish_date":       { "type": "date", "format": "yyyy-MM-dd" },
+      "publish_hour":       { "type": "integer" },
+      "publish_dow":        { "type": "integer" },
+      "source":             { "type": "keyword" },
+      "source_domain":      { "type": "keyword" },
+      "source_type":        { "type": "keyword" },
+      "category_raw":       { "type": "keyword" },
+      "category_normalized":{ "type": "keyword" },
+      "author":             { "type": "keyword" },
+      "language":           { "type": "keyword" },
+      "keywords":           { "type": "keyword" },
+      "entities": {
+        "type": "nested",
+        "properties": {
+          "text": { "type": "keyword" },
+          "type": { "type": "keyword" }
+        }
+      },
+      "content_length":     { "type": "integer" },
+      "word_count":         { "type": "integer" },
+      "has_full_content":   { "type": "boolean" },
+      "dup_group_id":       { "type": "keyword" },
+      "is_canonical":       { "type": "boolean" },
+      "dup_count":          { "type": "integer" }
+    }
+  }
+}
