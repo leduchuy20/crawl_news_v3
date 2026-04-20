@@ -18,3 +18,4 @@ Thumbs.db
 # Claude Code local state
 .claude/
 
+data/articles_ready*.jsonl
