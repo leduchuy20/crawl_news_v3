@@ -90,7 +90,7 @@ def migrate_row(row: Dict[str, str], default_source_type: str) -> Optional[Artic
     if not url:
         return None
 
-    title = (row.get("title") or "").strip()
+    title = clean_content(row.get("title") or "")
     if not title:
         return None
 
