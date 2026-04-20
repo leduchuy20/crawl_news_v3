@@ -313,8 +313,15 @@ def crawl_feed(
     stats = {"fetched": 0, "added": 0, "skipped_dup": 0, "skipped_old": 0, "skipped_invalid": 0}
 
     log.info(f"Fetching feed: {feed_url}")
-    # feedparser tự fetch — không qua HttpClient vì feed thường ít bị rate limit hơn bài
-    feed = feedparser.parse(feed_url)
+    # Fetch qua HttpClient (có LegacySSLAdapter + browser UA) rồi feed bytes vào feedparser.
+    # Cần vậy vì feedparser 6.0+ dùng SSL handler riêng → bypass urllib.install_opener patch,
+    # dẫn đến lỗi UNSAFE_LEGACY_RENEGOTIATION_DISABLED trên nhiều báo VN (baotintuc, ...).
+    # Đồng thời UA giống Chrome tránh WAF (dantri, ...) trả HTML thay vì RSS.
+    resp = http.get(feed_url)
+    if resp is None:
+        log.warning(f"Feed fetch failed: {feed_url}")
+        return stats
+    feed = feedparser.parse(resp.content)
     if getattr(feed, "bozo", False) and not feed.entries:
         log.warning(f"Feed parse failed: {feed_url} — {feed.bozo_exception}")
         return stats

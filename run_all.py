@@ -3,20 +3,33 @@
 """
 run_all.py
 ----------
-Entry point chính: chạy cả RSS crawler và HTML crawler.
+Entry point chính: chạy cả RSS crawler và HTML crawler, rồi post-process
+(cleanup + NER) để dataset sẵn sàng index.
+
+Pipeline:
+    1. RSS crawler       → data/rss_articles.jsonl
+    2. HTML crawler      → data/html_articles.jsonl
+    3. Build dataset     → data/articles_final*.jsonl
+    4. Cleanup           → data/articles_cleaned*.jsonl  (FULL REBUILD, ~1-2 phút)
+    5. NER               → data/articles_ner*.jsonl      (INCREMENTAL, chỉ NER bài mới)
 
 Usage:
-    python run_all.py                    # chạy tất cả với default
-    python run_all.py --rss-only         # chỉ RSS
-    python run_all.py --html-only        # chỉ HTML
-    python run_all.py --start 2026-01-01 # từ ngày cụ thể
-    python run_all.py --no-enrich        # RSS không enrich full content
+    python run_all.py                     # chạy tất cả với default
+    python run_all.py --rss-only          # chỉ RSS
+    python run_all.py --html-only         # chỉ HTML
+    python run_all.py --start 2026-01-01  # từ ngày cụ thể
+    python run_all.py --no-enrich         # RSS không enrich full content
+    python run_all.py --skip-cleanup      # bỏ qua bước cleanup
+    python run_all.py --skip-ner          # bỏ qua bước NER
+    python run_all.py --ner-workers 4     # NER với 4 workers
 """
 
 from __future__ import annotations
 
 import argparse
 import os
+import subprocess
+import sys
 from datetime import datetime, timedelta
 
 from rss_crawler import run_rss_crawler, RSS_FEEDS
@@ -46,6 +59,15 @@ def main():
                         help="Thư mục output. Default: data/")
     parser.add_argument("--skip-build", action="store_true",
                         help="Bỏ qua bước build articles_final.jsonl sau khi crawl")
+    parser.add_argument("--skip-cleanup", action="store_true",
+                        help="Bỏ qua bước cleanup (pre_dataset/01_cleanup.py)")
+    parser.add_argument("--skip-ner", action="store_true",
+                        help="Bỏ qua bước NER (pre_dataset/02_ner.py)")
+    parser.add_argument("--ner-workers", type=int, default=2,
+                        help="Số process song song cho NER. Default 2 (an toàn GHA). "
+                             "Local khuyên --ner-workers 4")
+    parser.add_argument("--ner-title-only", action="store_true",
+                        help="NER chỉ chạy trên title (nhanh, dùng để test)")
     args = parser.parse_args()
 
     os.makedirs(args.output_dir, exist_ok=True)
@@ -93,9 +115,62 @@ def main():
             log_path=os.path.join(args.output_dir, "build_dataset.log"),
         )
 
+    if not args.skip_cleanup:
+        logger.info(">>> RUNNING CLEANUP (pre_dataset/01_cleanup.py)")
+        run_cleanup(args.output_dir, logger)
+
+    if not args.skip_ner:
+        logger.info(">>> RUNNING NER (pre_dataset/02_ner.py)")
+        run_ner(args.output_dir, args.ner_workers, args.ner_title_only, logger)
+
     logger.info("=" * 70)
     logger.info("PIPELINE FINISHED")
     logger.info("=" * 70)
+
+
+def run_cleanup(output_dir: str, logger):
+    """Invoke pre_dataset/01_cleanup.py qua subprocess.
+
+    Cleanup = FULL REBUILD: đọc mọi articles_final*.jsonl + migrated_*.jsonl,
+    ghi articles_cleaned*.jsonl với rotation ở 89MB. ~1-2 phút cho 150k bài.
+    """
+    script = os.path.join("pre_dataset", "01_cleanup.py")
+    cmd = [
+        sys.executable, script,
+        "--input", os.path.join(output_dir, "articles_final*.jsonl"),
+        "--input", os.path.join(output_dir, "migrated_*.jsonl"),
+        "--output", os.path.join(output_dir, "articles_cleaned.jsonl"),
+    ]
+    logger.info(f"  $ {' '.join(cmd)}")
+    result = subprocess.run(cmd, check=False)
+    if result.returncode != 0:
+        logger.error(f"Cleanup FAILED (exit code {result.returncode})")
+        raise SystemExit(result.returncode)
+    logger.info("  Cleanup OK")
+
+
+def run_ner(output_dir: str, workers: int, title_only: bool, logger):
+    """Invoke pre_dataset/02_ner.py qua subprocess.
+
+    NER = INCREMENTAL: scan ID đã có trong articles_ner*.jsonl, chỉ NER phần mới.
+    Lần chạy đầu (100k+ bài) có thể mất nhiều giờ → dùng --skip-ner trên GHA nếu cần.
+    Daily run chỉ delta ~500-2000 bài → 5-30 phút.
+    """
+    script = os.path.join("pre_dataset", "02_ner.py")
+    cmd = [
+        sys.executable, script,
+        "--input", os.path.join(output_dir, "articles_cleaned*.jsonl"),
+        "--output", os.path.join(output_dir, "articles_ner.jsonl"),
+        "--workers", str(workers),
+    ]
+    if title_only:
+        cmd.append("--title-only")
+    logger.info(f"  $ {' '.join(cmd)}")
+    result = subprocess.run(cmd, check=False)
+    if result.returncode != 0:
+        logger.error(f"NER FAILED (exit code {result.returncode})")
+        raise SystemExit(result.returncode)
+    logger.info("  NER OK")
 
 
 if __name__ == "__main__":

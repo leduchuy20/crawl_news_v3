@@ -22,7 +22,7 @@ concurrency:
 jobs:
   crawl:
     runs-on: ubuntu-latest
-    timeout-minutes: 120
+    timeout-minutes: 330  # 5.5h — chừa thời gian cho NER lần đầu (~4h với full dataset)
 
     env:
       PYTHONIOENCODING: utf-8
@@ -59,6 +59,7 @@ jobs:
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          # Commit cả cleaned + ner partitions (multi-partition với rotation 89MB)
           git add data/*.jsonl data/*.json 2>/dev/null || true
           if git diff --cached --quiet; then
             echo "No data changes to commit."
