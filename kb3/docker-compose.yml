@@ -1,0 +1,41 @@
+version: "3.9"
+
+# App services: FastAPI backend + static frontend.
+# Giả định Elasticsearch + ClickHouse đã chạy sẵn từ main_process/docker-compose.yml
+# (cùng network `news-net` — docker prefix tên folder → `main_process_news-net`).
+
+services:
+  backend:
+    build: ./backend
+    container_name: news-api
+    environment:
+      - ES_URL=http://news-es:9200
+      - CH_HOST=news-ch
+      - CH_PORT=9000
+      - JWT_SECRET=${JWT_SECRET:-dev-secret-change-me}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD:-admin123}
+      - GUEST_PASSWORD=${GUEST_PASSWORD:-guest123}
+    ports:
+      - "8000:8000"
+    networks:
+      - news-net
+    restart: unless-stopped
+
+  frontend:
+    image: nginx:alpine
+    container_name: news-ui
+    volumes:
+      - ./frontend:/usr/share/nginx/html:ro
+    ports:
+      - "8080:80"
+    networks:
+      - news-net
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+networks:
+  news-net:
+    # Reuse network đã tạo bởi main_process/docker-compose.yml
+    external: true
+    name: main_process_news-net

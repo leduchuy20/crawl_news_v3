@@ -1,0 +1,7 @@
+fastapi>=0.110.0
+uvicorn[standard]>=0.29.0
+pydantic>=2.5.0
+elasticsearch>=8.0.0,<9.0.0
+clickhouse-driver>=0.2.7
+PyJWT>=2.8.0
+python-multipart>=0.0.9
