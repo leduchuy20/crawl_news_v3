@@ -3,348 +3,1020 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>News Analytics Demo</title>
+<title>News Analytics — Vietnamese News Trends</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <style>
+/* =========================================================================
+   Design tokens
+   ========================================================================= */
+:root {
+  --brand: #2563eb;
+  --brand-2: #7c3aed;
+  --brand-soft: #eff6ff;
+  --success: #10b981;
+  --warn:    #f59e0b;
+  --danger:  #ef4444;
+  --hot:     #e11d48;
+
+  --bg:      #f6f7fb;
+  --panel:   #ffffff;
+  --panel-2: #fafbfd;
+  --border:  #e5e7eb;
+  --border-2:#eef0f4;
+  --text:    #111827;
+  --text-2:  #4b5563;
+  --text-3:  #9ca3af;
+  --mark-bg: #fef3c7;
+  --mark-fg: #78350f;
+
+  --shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.04);
+  --shadow:    0 2px 8px rgba(15, 23, 42, 0.06);
+  --shadow-lg: 0 12px 32px rgba(15, 23, 42, 0.12);
+
+  --radius-sm: 8px;
+  --radius:    12px;
+  --radius-lg: 16px;
+
+  --gap-1: 6px;
+  --gap-2: 10px;
+  --gap-3: 16px;
+  --gap-4: 24px;
+}
+html[data-theme="dark"] {
+  --bg:      #0b1020;
+  --panel:   #121829;
+  --panel-2: #0f1526;
+  --border:  #1f2742;
+  --border-2:#181f38;
+  --text:    #e5e7eb;
+  --text-2:  #9ca3af;
+  --text-3:  #6b7280;
+  --brand-soft: #1e293b;
+  --mark-bg: #78350f;
+  --mark-fg: #fde68a;
+  --shadow: 0 2px 10px rgba(0,0,0,0.35);
+  --shadow-lg: 0 16px 40px rgba(0,0,0,0.5);
+}
+
+/* =========================================================================
+   Reset + base
+   ========================================================================= */
 * { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
 body {
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", sans-serif;
-  margin: 0;
-  padding: 20px;
-  background: #f5f5f7;
-  color: #1d1d1f;
+  font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", "Helvetica Neue", sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 14px;
+  line-height: 1.5;
+  min-height: 100vh;
+  transition: background .2s ease, color .2s ease;
 }
-.container { max-width: 1200px; margin: 0 auto; }
-h1 { font-size: 22px; font-weight: 500; margin: 0 0 4px 0; }
-.subtitle { color: #666; font-size: 13px; margin-bottom: 20px; }
+button, input, select { font: inherit; color: inherit; }
+a { color: var(--brand); text-decoration: none; }
+a:hover { text-decoration: underline; }
+code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  background: var(--brand-soft); padding: 1px 6px; border-radius: 4px; font-size: 12px;
+}
+::selection { background: var(--brand); color: white; }
 
-.auth-bar {
-  background: #fff; padding: 12px 16px; border-radius: 8px;
-  display: flex; align-items: center; gap: 12px; margin-bottom: 16px;
-  border: 1px solid #e5e5e7;
+/* =========================================================================
+   Top navigation
+   ========================================================================= */
+.topbar {
+  position: sticky; top: 0; z-index: 50;
+  background: color-mix(in srgb, var(--panel) 86%, transparent);
+  backdrop-filter: saturate(160%) blur(10px);
+  -webkit-backdrop-filter: saturate(160%) blur(10px);
+  border-bottom: 1px solid var(--border);
 }
-.auth-bar input {
-  border: 1px solid #d2d2d7; border-radius: 6px; padding: 6px 10px; font-size: 13px; width: 140px;
+.topbar-inner {
+  max-width: 1280px; margin: 0 auto;
+  display: flex; align-items: center; gap: var(--gap-3);
+  padding: 12px 24px;
 }
-.auth-bar button {
-  background: #0071e3; color: white; border: none; border-radius: 6px;
-  padding: 7px 14px; cursor: pointer; font-size: 13px;
+.brand {
+  display: flex; align-items: center; gap: 10px;
+  font-weight: 600; font-size: 15px; color: var(--text);
 }
-.auth-bar button:hover { background: #0077ed; }
-.auth-bar button.secondary { background: #fff; color: #0071e3; border: 1px solid #0071e3; }
-.auth-status { color: #666; font-size: 13px; margin-left: auto; }
-.auth-status.admin { color: #0071e3; font-weight: 500; }
-.auth-status.guest { color: #666; }
+.brand-logo {
+  width: 32px; height: 32px; border-radius: 9px;
+  background: linear-gradient(135deg, var(--brand), var(--brand-2));
+  display: grid; place-items: center; color: white;
+  box-shadow: var(--shadow);
+}
+.brand small {
+  display: block; font-size: 11px; color: var(--text-3); font-weight: 400;
+  margin-top: -2px;
+}
 
-.tabs {
-  display: flex; gap: 4px; background: #fff; padding: 6px; border-radius: 8px;
-  border: 1px solid #e5e5e7; margin-bottom: 16px;
+.nav-tabs {
+  display: flex; gap: 4px; margin-left: 8px;
+  background: var(--panel-2); border: 1px solid var(--border);
+  border-radius: 10px; padding: 4px;
 }
-.tab {
-  flex: 1; padding: 10px; text-align: center; cursor: pointer; border-radius: 6px;
-  font-size: 14px; color: #555;
+.nav-tab {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 6px 12px; border-radius: 7px; cursor: pointer;
+  color: var(--text-2); font-size: 13px; font-weight: 500;
+  transition: all .15s ease;
+  user-select: none;
 }
-.tab:hover { background: #f5f5f7; }
-.tab.active { background: #0071e3; color: white; }
-
-.panel { background: #fff; padding: 20px; border-radius: 8px; border: 1px solid #e5e5e7; }
-.panel h2 { font-size: 18px; font-weight: 500; margin: 0 0 16px 0; }
-
-.controls { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; align-items: center; }
-.controls input, .controls select {
-  border: 1px solid #d2d2d7; border-radius: 6px; padding: 7px 10px; font-size: 13px;
+.nav-tab:hover { color: var(--text); background: var(--bg); }
+.nav-tab.active {
+  background: var(--brand); color: white;
+  box-shadow: var(--shadow-sm);
 }
-.controls input[type="search"] { min-width: 240px; }
-.controls button {
-  background: #0071e3; color: white; border: none; border-radius: 6px;
-  padding: 7px 14px; cursor: pointer; font-size: 13px;
+.nav-tab.active svg { color: white; }
+.nav-tab svg { color: var(--text-3); }
+
+.nav-spacer { flex: 1; }
+
+.icon-btn {
+  width: 36px; height: 36px; display: grid; place-items: center;
+  border-radius: 8px; border: 1px solid var(--border);
+  background: var(--panel); cursor: pointer; color: var(--text-2);
+  transition: all .15s ease;
 }
-.controls label { font-size: 13px; color: #555; }
-.controls .hint { color: #888; font-size: 12px; margin-left: auto; }
+.icon-btn:hover { background: var(--bg); color: var(--text); }
 
-.grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
-.grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
-@media (max-width: 800px) { .grid-2, .grid-3 { grid-template-columns: 1fr; } }
+.user-chip {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 6px 10px 6px 6px; border-radius: 999px;
+  background: var(--panel); border: 1px solid var(--border);
+  cursor: pointer; font-size: 13px; color: var(--text-2);
+  transition: all .15s ease;
+}
+.user-chip:hover { background: var(--bg); }
+.user-avatar {
+  width: 26px; height: 26px; border-radius: 50%;
+  background: linear-gradient(135deg, var(--brand), var(--brand-2));
+  color: white; display: grid; place-items: center;
+  font-size: 12px; font-weight: 600;
+}
+.user-chip[data-role="admin"] .user-avatar {
+  background: linear-gradient(135deg, #f59e0b, #ef4444);
+}
+.user-chip[data-role="guest"] .user-avatar {
+  background: linear-gradient(135deg, #6b7280, #374151);
+}
+.role-badge {
+  padding: 1px 7px; border-radius: 999px;
+  font-size: 11px; font-weight: 600; letter-spacing: .02em;
+}
+.role-badge.admin { background: #fef3c7; color: #92400e; }
+.role-badge.guest { background: #e5e7eb; color: #4b5563; }
+html[data-theme="dark"] .role-badge.admin { background: #78350f; color: #fde68a; }
+html[data-theme="dark"] .role-badge.guest { background: #374151; color: #d1d5db; }
 
+/* =========================================================================
+   Main content
+   ========================================================================= */
+.container { max-width: 1280px; margin: 0 auto; padding: 20px 24px 60px 24px; }
+
+.page-title {
+  display: flex; align-items: baseline; gap: 10px; margin-bottom: 6px;
+}
+.page-title h1 { font-size: 24px; font-weight: 700; margin: 0; letter-spacing: -.01em; }
+.page-title .tag {
+  font-size: 11px; font-weight: 600;
+  padding: 2px 8px; border-radius: 999px;
+  background: var(--brand-soft); color: var(--brand);
+  text-transform: uppercase; letter-spacing: .06em;
+}
+.page-subtitle { color: var(--text-2); font-size: 13px; margin-bottom: 24px; }
+
+/* =========================================================================
+   KPI strip
+   ========================================================================= */
+.kpi-strip {
+  display: grid; grid-template-columns: repeat(4, 1fr); gap: var(--gap-3);
+  margin-bottom: var(--gap-4);
+}
+@media (max-width: 900px) { .kpi-strip { grid-template-columns: repeat(2, 1fr); } }
+.kpi {
+  background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 16px; position: relative; overflow: hidden;
+  transition: transform .15s ease, box-shadow .15s ease;
+}
+.kpi:hover { transform: translateY(-1px); box-shadow: var(--shadow); }
+.kpi::before {
+  content: ""; position: absolute; top: 0; left: 0; right: 0; height: 3px;
+  background: linear-gradient(90deg, var(--brand), var(--brand-2));
+}
+.kpi-label {
+  font-size: 11px; color: var(--text-3); text-transform: uppercase;
+  letter-spacing: .08em; font-weight: 600;
+}
+.kpi-value {
+  font-size: 24px; font-weight: 700; margin-top: 4px;
+  font-variant-numeric: tabular-nums; letter-spacing: -.01em;
+}
+.kpi-hint { font-size: 12px; color: var(--text-2); margin-top: 2px; }
+.kpi-icon {
+  position: absolute; right: 12px; top: 12px;
+  width: 32px; height: 32px; border-radius: 8px;
+  display: grid; place-items: center;
+  background: var(--brand-soft); color: var(--brand);
+}
+
+/* =========================================================================
+   Panel
+   ========================================================================= */
+.panel {
+  background: var(--panel); border: 1px solid var(--border);
+  border-radius: var(--radius-lg); padding: 24px;
+  box-shadow: var(--shadow-sm);
+}
+.panel + .panel { margin-top: var(--gap-3); }
+.panel-header { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; }
+.panel-header h2 { margin: 0; font-size: 17px; font-weight: 600; letter-spacing: -.01em; }
+.panel-header .help { color: var(--text-3); font-size: 12.5px; margin-left: auto; }
+
+/* =========================================================================
+   Forms / controls
+   ========================================================================= */
+.controls { display: flex; gap: var(--gap-2); flex-wrap: wrap; align-items: center; }
+.controls label { font-size: 12.5px; color: var(--text-2); }
+.field {
+  background: var(--panel); border: 1px solid var(--border); border-radius: 9px;
+  padding: 8px 12px; font-size: 13px; color: var(--text);
+  transition: border-color .15s ease, box-shadow .15s ease;
+}
+.field:focus { outline: none; border-color: var(--brand); box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand) 18%, transparent); }
+.field--wide { min-width: 280px; flex: 1; max-width: 480px; }
+select.field { cursor: pointer; padding-right: 28px; background-image: none; }
+
+.btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: var(--brand); color: white; border: none; border-radius: 9px;
+  padding: 8px 14px; cursor: pointer; font-size: 13px; font-weight: 500;
+  transition: all .15s ease;
+  white-space: nowrap;
+}
+.btn:hover { background: color-mix(in srgb, var(--brand) 88%, black); }
+.btn--ghost {
+  background: transparent; color: var(--text-2);
+  border: 1px solid var(--border);
+}
+.btn--ghost:hover { background: var(--bg); color: var(--text); }
+.btn--danger { background: var(--danger); }
+.btn--danger:hover { background: color-mix(in srgb, var(--danger) 90%, black); }
+.btn--lg { padding: 10px 18px; font-size: 14px; }
+
+.search-group {
+  display: flex; align-items: stretch;
+  background: var(--panel); border: 1px solid var(--border); border-radius: 12px;
+  padding: 4px; gap: 4px; box-shadow: var(--shadow-sm);
+}
+.search-group .field {
+  border: none; background: transparent; flex: 1; min-width: 200px;
+  padding: 8px 10px;
+}
+.search-group .field:focus { box-shadow: none; outline: none; }
+.search-group .field.sep { border-left: 1px solid var(--border); padding-left: 12px; }
+.search-group .btn { border-radius: 8px; }
+
+.hint { color: var(--text-3); font-size: 12px; }
+.meta { font-size: 12px; color: var(--text-2); }
+.meta .ms { color: var(--brand); font-weight: 600; }
+
+/* =========================================================================
+   Grid
+   ========================================================================= */
+.grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: var(--gap-3); }
+.grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--gap-3); }
+.grid-12 { display: grid; grid-template-columns: 2fr 1fr; gap: var(--gap-3); }
+@media (max-width: 960px) {
+  .grid-2, .grid-3, .grid-12 { grid-template-columns: 1fr; }
+}
+
+/* =========================================================================
+   Cards
+   ========================================================================= */
 .card {
-  background: #f9f9fb; padding: 14px; border-radius: 6px;
-  border: 1px solid #e5e5e7;
+  background: var(--panel); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 16px;
+  transition: border-color .15s ease, transform .15s ease;
 }
-.card h3 { font-size: 14px; font-weight: 500; margin: 0 0 8px 0; color: #333; }
+.card:hover { border-color: color-mix(in srgb, var(--brand) 25%, var(--border)); }
+.card-header {
+  display: flex; align-items: center; gap: 8px; margin-bottom: 10px;
+}
+.card-header h3 {
+  margin: 0; font-size: 13.5px; font-weight: 600; color: var(--text);
+  display: flex; align-items: center; gap: 8px;
+}
+.card-header .card-icon {
+  width: 26px; height: 26px; border-radius: 6px;
+  background: var(--brand-soft); color: var(--brand);
+  display: grid; place-items: center; flex-shrink: 0;
+}
+.card-header .meta { margin-left: auto; }
 .card canvas { max-width: 100%; }
 
-.results { margin-top: 16px; }
+/* =========================================================================
+   Article list
+   ========================================================================= */
 .article {
-  padding: 14px; border: 1px solid #e5e5e7; border-radius: 6px;
-  margin-bottom: 10px; background: #fff;
+  padding: 14px 16px; border: 1px solid var(--border); border-radius: var(--radius);
+  margin-bottom: 10px; background: var(--panel);
+  transition: all .15s ease;
+  cursor: pointer;
+}
+.article:hover {
+  border-color: color-mix(in srgb, var(--brand) 35%, var(--border));
+  box-shadow: var(--shadow);
+  transform: translateY(-1px);
 }
 .article-title {
-  font-size: 15px; font-weight: 500; margin: 0 0 6px 0;
-  color: #1d1d1f; cursor: pointer;
+  font-size: 15px; font-weight: 600; margin: 0 0 6px 0;
+  color: var(--text); line-height: 1.4;
 }
-.article-title:hover { color: #0071e3; }
+.article:hover .article-title { color: var(--brand); }
 .article-meta {
-  font-size: 12px; color: #666; display: flex; gap: 12px;
-  flex-wrap: wrap; margin-bottom: 6px;
+  font-size: 12px; color: var(--text-2); display: flex; gap: 8px;
+  flex-wrap: wrap; margin-bottom: 6px; align-items: center;
 }
-.article-meta .badge {
-  background: #eff6ff; color: #0c4a6e; padding: 2px 8px; border-radius: 10px;
-  font-size: 11px;
+.badge {
+  display: inline-flex; align-items: center; gap: 4px;
+  background: var(--brand-soft); color: var(--brand);
+  padding: 2px 9px; border-radius: 999px;
+  font-size: 11px; font-weight: 500;
 }
-.article-meta .badge.category { background: #f0fdf4; color: #065f46; }
-.article-meta .badge.author { background: #fef3c7; color: #78350f; }
-.article-meta .badge.hidden { background: #fee2e2; color: #7f1d1d; }
-.article-snippet {
-  font-size: 13px; color: #555; line-height: 1.5;
-}
-.article-snippet mark {
-  background: #fef3c7; color: #78350f; padding: 1px 2px; border-radius: 2px;
-}
+.badge.category { background: #ecfdf5; color: #065f46; }
+.badge.author   { background: #fef3c7; color: #92400e; }
+.badge.hidden   { background: #fee2e2; color: #991b1b; opacity: .85; }
+.badge.score    { background: var(--panel-2); color: var(--text-2); }
+html[data-theme="dark"] .badge.category { background: #064e3b; color: #a7f3d0; }
+html[data-theme="dark"] .badge.author   { background: #78350f; color: #fde68a; }
+html[data-theme="dark"] .badge.hidden   { background: #7f1d1d; color: #fecaca; }
 
-.meta { font-size: 12px; color: #888; margin-top: 8px; }
-.meta .ms { color: #0071e3; font-weight: 500; }
+.article-snippet { font-size: 13px; color: var(--text-2); line-height: 1.55; }
+.article-snippet mark { background: var(--mark-bg); color: var(--mark-fg); padding: 1px 3px; border-radius: 3px; }
+
+/* =========================================================================
+   Tables
+   ========================================================================= */
+/* Chart wrapper — fix infinite grow bug of maintainAspectRatio:false */
+.chart-wrap {
+  position: relative; width: 100%;
+  height: 240px;
+}
+.chart-wrap.tall { height: 320px; }
+.chart-wrap > canvas { position: absolute; inset: 0; width: 100% !important; height: 100% !important; }
 
 table { width: 100%; border-collapse: collapse; font-size: 13px; }
 table th {
-  text-align: left; font-weight: 500; color: #555;
-  padding: 8px; border-bottom: 1px solid #e5e5e7;
+  text-align: left; font-weight: 600; color: var(--text-2); font-size: 11px;
+  letter-spacing: .06em; text-transform: uppercase;
+  padding: 10px 10px; border-bottom: 1px solid var(--border);
+  background: var(--panel-2);
 }
-table td { padding: 8px; border-bottom: 1px solid #f0f0f0; }
-table tr:hover td { background: #fafafa; }
+table td { padding: 10px 10px; border-bottom: 1px solid var(--border-2); }
+table tr:last-child td { border-bottom: none; }
+table tr:hover td { background: var(--panel-2); }
 table .num { text-align: right; font-variant-numeric: tabular-nums; }
+.mini-bar {
+  display: inline-block; height: 6px; border-radius: 3px;
+  background: linear-gradient(90deg, var(--brand), var(--brand-2));
+  vertical-align: middle; margin-right: 8px;
+}
 
 .mult-badge {
-  display: inline-block; padding: 2px 8px; border-radius: 10px;
-  font-size: 12px; font-weight: 500;
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 2px 9px; border-radius: 999px;
+  font-size: 11.5px; font-weight: 600;
+  font-variant-numeric: tabular-nums;
 }
-.mult-badge.hot { background: #fee2e2; color: #991b1b; }
-.mult-badge.warm { background: #fef3c7; color: #78350f; }
-.mult-badge.normal { background: #f3f4f6; color: #6b7280; }
+.mult-badge.hot    { background: #fee2e2; color: #991b1b; }
+.mult-badge.warm   { background: #fef3c7; color: #92400e; }
+.mult-badge.normal { background: var(--panel-2); color: var(--text-2); }
+html[data-theme="dark"] .mult-badge.hot    { background: #7f1d1d; color: #fecaca; }
+html[data-theme="dark"] .mult-badge.warm   { background: #78350f; color: #fde68a; }
 
-.error { color: #dc2626; padding: 10px; background: #fee2e2; border-radius: 6px; font-size: 13px; }
-.loading { color: #888; padding: 10px; font-size: 13px; }
-.empty { color: #999; padding: 20px; text-align: center; font-size: 13px; }
-
-.detail-content {
-  white-space: pre-wrap; font-size: 14px; line-height: 1.7;
-  background: #fafafa; padding: 16px; border-radius: 6px; max-height: 400px;
-  overflow-y: auto; margin-top: 12px;
-}
-.entities-grid {
-  display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px;
-}
+/* =========================================================================
+   Entity chips
+   ========================================================================= */
+.entities-grid { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
 .entity-chip {
-  padding: 3px 10px; border-radius: 14px; font-size: 12px;
+  padding: 3px 11px; border-radius: 999px; font-size: 12px; font-weight: 500;
 }
-.entity-chip.PER { background: #fce7f3; color: #831843; }
-.entity-chip.LOC { background: #dbeafe; color: #1e3a8a; }
-.entity-chip.ORG { background: #dcfce7; color: #14532d; }
+.entity-chip.PER  { background: #fce7f3; color: #831843; }
+.entity-chip.LOC  { background: #dbeafe; color: #1e3a8a; }
+.entity-chip.ORG  { background: #dcfce7; color: #14532d; }
 .entity-chip.MISC { background: #f3f4f6; color: #374151; }
+html[data-theme="dark"] .entity-chip.PER  { background: #500724; color: #fbcfe8; }
+html[data-theme="dark"] .entity-chip.LOC  { background: #172554; color: #bfdbfe; }
+html[data-theme="dark"] .entity-chip.ORG  { background: #052e16; color: #bbf7d0; }
+html[data-theme="dark"] .entity-chip.MISC { background: #1f2937; color: #d1d5db; }
 
+/* =========================================================================
+   Status / skeletons / empty
+   ========================================================================= */
+.error { color: var(--danger); padding: 10px 14px; background: #fee2e2; border-radius: 9px; font-size: 13px; }
+html[data-theme="dark"] .error { background: #3f1d1d; color: #fecaca; }
+.loading { color: var(--text-3); padding: 10px; font-size: 13px; display: inline-flex; align-items: center; gap: 8px; }
+.spinner {
+  width: 14px; height: 14px; border-radius: 50%;
+  border: 2px solid var(--border); border-top-color: var(--brand);
+  animation: spin .8s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.empty {
+  color: var(--text-3); padding: 32px 20px; text-align: center; font-size: 13px;
+  display: flex; flex-direction: column; align-items: center; gap: 10px;
+}
+.empty svg { color: var(--text-3); opacity: .6; }
+.skeleton {
+  background: linear-gradient(90deg, var(--border-2), var(--border), var(--border-2));
+  background-size: 200% 100%;
+  animation: shimmer 1.4s infinite;
+  border-radius: 6px;
+}
+@keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+
+/* =========================================================================
+   Modal
+   ========================================================================= */
+.modal-backdrop {
+  position: fixed; inset: 0; background: rgba(0,0,0,.5);
+  backdrop-filter: blur(4px);
+  z-index: 100; display: flex; align-items: center; justify-content: center;
+  padding: 20px; animation: fadeIn .15s ease;
+}
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+.modal {
+  background: var(--panel); border-radius: var(--radius-lg);
+  padding: 24px; max-width: 820px; width: 100%; max-height: 85vh;
+  overflow-y: auto; box-shadow: var(--shadow-lg);
+  animation: popIn .2s ease;
+}
+@keyframes popIn { from { opacity: 0; transform: scale(.97); } to { opacity: 1; transform: scale(1); } }
+.modal-header {
+  display: flex; justify-content: space-between; align-items: flex-start;
+  gap: 12px; margin-bottom: 12px;
+}
+.modal-header h2 { margin: 0; font-size: 18px; font-weight: 600; line-height: 1.35; }
+.modal-close {
+  background: transparent; border: none; width: 32px; height: 32px;
+  border-radius: 8px; display: grid; place-items: center;
+  cursor: pointer; color: var(--text-2);
+}
+.modal-close:hover { background: var(--bg); color: var(--text); }
+.modal-body {
+  font-size: 14px; line-height: 1.7; white-space: pre-wrap;
+  background: var(--panel-2); padding: 16px; border-radius: 10px;
+  max-height: 360px; overflow-y: auto; margin-top: 14px;
+  border: 1px solid var(--border-2);
+}
+
+/* =========================================================================
+   Settings drawer (API URL + login)
+   ========================================================================= */
+.drawer-backdrop {
+  position: fixed; inset: 0; background: rgba(0,0,0,.35);
+  z-index: 99; display: none; animation: fadeIn .15s ease;
+}
+.drawer-backdrop.open { display: block; }
+.drawer {
+  position: fixed; top: 0; right: 0; bottom: 0; width: 380px; max-width: 90vw;
+  background: var(--panel); z-index: 100; padding: 24px;
+  box-shadow: var(--shadow-lg); transform: translateX(100%);
+  transition: transform .25s cubic-bezier(.2,.9,.25,1);
+  overflow-y: auto;
+}
+.drawer.open { transform: translateX(0); }
+.drawer h3 {
+  margin: 0 0 4px 0; font-size: 17px; font-weight: 600;
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+}
+.drawer .section { margin-top: 20px; }
+.drawer .section-label {
+  font-size: 11px; color: var(--text-3); text-transform: uppercase;
+  letter-spacing: .08em; font-weight: 600; margin-bottom: 8px;
+}
+.drawer .form-row { margin-bottom: 10px; }
+.drawer .form-row .field { width: 100%; }
+.drawer .form-row label {
+  display: block; font-size: 12px; color: var(--text-2);
+  margin-bottom: 4px; font-weight: 500;
+}
+.quick-login {
+  display: flex; gap: 6px; flex-wrap: wrap; margin-top: 4px;
+}
+.quick-login button {
+  flex: 1; background: var(--panel-2); border: 1px solid var(--border);
+  color: var(--text-2); padding: 7px 10px; border-radius: 8px;
+  cursor: pointer; font-size: 12px; font-weight: 500;
+  transition: all .15s ease;
+}
+.quick-login button:hover { background: var(--brand-soft); color: var(--brand); border-color: var(--brand); }
+
+/* =========================================================================
+   RBAC diff
+   ========================================================================= */
+.rbac-roles {
+  display: grid; grid-template-columns: 1fr 1fr; gap: var(--gap-3); margin-top: 10px;
+}
+@media (max-width: 800px) { .rbac-roles { grid-template-columns: 1fr; } }
+.rbac-pane {
+  background: var(--panel-2); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 14px;
+}
+.rbac-pane.admin { border-top: 3px solid var(--warn); }
+.rbac-pane.guest { border-top: 3px solid var(--text-3); }
+.rbac-pane h4 {
+  margin: 0 0 8px 0; font-size: 12px; font-weight: 600;
+  color: var(--text-2); text-transform: uppercase; letter-spacing: .06em;
+  display: flex; align-items: center; gap: 6px;
+}
+.kv {
+  display: grid; grid-template-columns: 120px 1fr; gap: 8px 12px;
+  font-size: 13px;
+}
+.kv dt { color: var(--text-3); font-weight: 500; }
+.kv dd { margin: 0; word-break: break-word; }
+.kv dd.missing { color: var(--danger); font-style: italic; font-weight: 500; }
+.kv dd.diff    { background: #fef3c7; padding: 1px 6px; border-radius: 4px; color: #92400e; }
+html[data-theme="dark"] .kv dd.diff { background: #78350f; color: #fde68a; }
+
+/* =========================================================================
+   Misc
+   ========================================================================= */
 .hidden-section { display: none; }
+.divider { height: 1px; background: var(--border); margin: 16px 0; }
+
+/* Scrollbar polish */
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 5px; }
+::-webkit-scrollbar-thumb:hover { background: var(--text-3); }
+::-webkit-scrollbar-track { background: transparent; }
 </style>
 </head>
 <body>
+
+<!-- ================================================================
+   SVG sprite
+   ================================================================ -->
+<svg width="0" height="0" style="position:absolute;" aria-hidden="true">
+  <defs>
+    <symbol id="i-logo" viewBox="0 0 24 24"><path fill="currentColor" d="M4 4h12a4 4 0 0 1 4 4v10a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2zm2 4v10h12V8zm2 2h8v1.5H8zm0 3h8v1.5H8zm0 3h5v1.5H8z"/></symbol>
+    <symbol id="i-search" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></symbol>
+    <symbol id="i-trend" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></symbol>
+    <symbol id="i-shield" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2 4 5v6c0 5 3.5 9.5 8 11 4.5-1.5 8-6 8-11V5z"/></symbol>
+    <symbol id="i-flame" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2s4 4 4 8a4 4 0 0 1-8 0c0-2 1-3 1-3s-3 2-3 6a6 6 0 0 0 12 0c0-5-6-11-6-11z"/></symbol>
+    <symbol id="i-clock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></symbol>
+    <symbol id="i-globe" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></symbol>
+    <symbol id="i-user" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></symbol>
+    <symbol id="i-pin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a7 7 0 0 0-7 7c0 5 7 13 7 13s7-8 7-13a7 7 0 0 0-7-7z"/><circle cx="12" cy="9" r="2.5"/></symbol>
+    <symbol id="i-calendar" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 9h18M8 3v4M16 3v4"/></symbol>
+    <symbol id="i-database" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v7c0 1.7 3.6 3 8 3s8-1.3 8-3V5"/><path d="M4 12v7c0 1.7 3.6 3 8 3s8-1.3 8-3v-7"/></symbol>
+    <symbol id="i-settings" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 0 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 0 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 0 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 0 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></symbol>
+    <symbol id="i-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></symbol>
+    <symbol id="i-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></symbol>
+    <symbol id="i-close" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/></symbol>
+    <symbol id="i-link" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1"/><path d="M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1"/></symbol>
+    <symbol id="i-filter" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="3 4 21 4 14 13 14 20 10 20 10 13"/></symbol>
+    <symbol id="i-tag" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12 12 20l-8-8V4h8z"/><circle cx="7.5" cy="7.5" r="1.5"/></symbol>
+    <symbol id="i-eye-off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.9 17.9A10 10 0 0 1 12 20c-7 0-10-8-10-8a17 17 0 0 1 3.6-4.7"/><path d="M9.9 5.1A10 10 0 0 1 12 5c7 0 10 7 10 7a17 17 0 0 1-2.3 3.2M1 1l22 22"/></symbol>
+    <symbol id="i-inbox" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.5 5h13l3 7v7a2 2 0 0 1-2 2h-15a2 2 0 0 1-2-2v-7z"/></symbol>
+  </defs>
+</svg>
+
+<!-- ================================================================
+   Topbar
+   ================================================================ -->
+<div class="topbar">
+  <div class="topbar-inner">
+    <div class="brand">
+      <div class="brand-logo"><svg width="18" height="18"><use href="#i-logo"/></svg></div>
+      <div>
+        News Analytics
+        <small>Vietnamese news · ES + ClickHouse</small>
+      </div>
+    </div>
+
+    <div class="nav-tabs" role="tablist">
+      <div class="nav-tab active" data-tab="tab-search" onclick="showTab('tab-search', this)">
+        <svg width="14" height="14"><use href="#i-search"/></svg> Search
+      </div>
+      <div class="nav-tab" data-tab="tab-trends" onclick="showTab('tab-trends', this)">
+        <svg width="14" height="14"><use href="#i-trend"/></svg> Trends
+      </div>
+      <div class="nav-tab" data-tab="tab-rbac" onclick="showTab('tab-rbac', this)">
+        <svg width="14" height="14"><use href="#i-shield"/></svg> RBAC
+      </div>
+    </div>
+
+    <div class="nav-spacer"></div>
+
+    <button class="icon-btn" onclick="toggleTheme()" title="Toggle theme">
+      <svg width="16" height="16" id="theme-icon"><use href="#i-moon"/></svg>
+    </button>
+
+    <div id="user-chip" class="user-chip" onclick="openSettings()">
+      <div class="user-avatar" id="user-avatar">G</div>
+      <span id="user-name">Guest</span>
+      <span class="role-badge guest" id="user-role-badge">anon</span>
+    </div>
+  </div>
+</div>
+
+<!-- ================================================================
+   Settings drawer
+   ================================================================ -->
+<div id="drawer-bg" class="drawer-backdrop" onclick="closeSettings()"></div>
+<div id="drawer" class="drawer">
+  <h3>
+    <span style="display:flex;align-items:center;gap:8px;">
+      <svg width="18" height="18"><use href="#i-settings"/></svg> Settings
+    </span>
+    <button class="icon-btn" onclick="closeSettings()" style="width:28px;height:28px;">
+      <svg width="14" height="14"><use href="#i-close"/></svg>
+    </button>
+  </h3>
+  <p style="color:var(--text-2);font-size:13px;margin:6px 0 0;">Configure API endpoint and sign in to unlock admin features.</p>
+
+  <div class="section">
+    <div class="section-label">Backend API</div>
+    <div class="form-row">
+      <label>API URL</label>
+      <input id="api-url" class="field" type="text" value="http://localhost:8000">
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-label">Sign in</div>
+    <div class="form-row">
+      <label>Username</label>
+      <input id="username" class="field" type="text" value="admin" autocomplete="username">
+    </div>
+    <div class="form-row">
+      <label>Password</label>
+      <input id="password" class="field" type="password" value="admin123" autocomplete="current-password">
+    </div>
+    <div class="quick-login">
+      <button onclick="quickLogin('admin','admin123')">Admin</button>
+      <button onclick="quickLogin('guest','guest123')">Guest</button>
+    </div>
+    <div style="display:flex;gap:6px;margin-top:12px;">
+      <button class="btn btn--lg" style="flex:1;" onclick="login()">Sign in</button>
+      <button class="btn btn--ghost btn--lg" onclick="logout()">Sign out</button>
+    </div>
+    <div id="auth-msg" style="font-size:12px;color:var(--text-3);margin-top:10px;"></div>
+  </div>
+
+  <div class="section">
+    <div class="section-label">About</div>
+    <p style="font-size:12.5px;color:var(--text-2);line-height:1.5;">
+      3 scenarios of the <strong>Vietnamese news storage &amp; trend analysis</strong> project:
+      ES full-text search, ClickHouse trending aggregates, and alias-based RBAC.
+    </p>
+  </div>
+</div>
+
+<!-- ================================================================
+   Main
+   ================================================================ -->
 <div class="container">
 
-<h1>News Analytics Demo</h1>
-<div class="subtitle">ES (search) + ClickHouse (trending) + RBAC — đề tài lưu trữ và phân tích xu hướng tin tức</div>
-
-<!-- ============================================================
-  AUTH BAR
-============================================================ -->
-<div class="auth-bar">
-  <input id="api-url" type="text" value="http://localhost:8000" style="width: 200px;">
-  <input id="username" type="text" placeholder="username" value="admin">
-  <input id="password" type="password" placeholder="password" value="admin123">
-  <button onclick="login()">Login</button>
-  <button class="secondary" onclick="logout()">Logout</button>
-  <div id="auth-status" class="auth-status">Not logged in</div>
-</div>
-
-<!-- ============================================================
-  TABS
-============================================================ -->
-<div class="tabs">
-  <div class="tab active" onclick="showTab('tab-search')">🔍 KB1 — Search</div>
-  <div class="tab" onclick="showTab('tab-trends')">📈 KB2 — Trending</div>
-  <div class="tab" onclick="showTab('tab-rbac')">🔐 KB3 — RBAC</div>
-</div>
-
-<!-- ============================================================
-  TAB 1: SEARCH
-============================================================ -->
-<div id="tab-search" class="panel">
-  <h2>Tìm kiếm bài báo</h2>
-  <div class="controls">
-    <input id="q-text" type="search" placeholder='Từ khoá (ví dụ: "Iran", "giá vàng")' value="Iran">
-    <select id="q-type">
-      <option value="text">Full-text search</option>
-      <option value="entity">Entity search (nested)</option>
-    </select>
-    <select id="q-entity-type" style="display:none;">
-      <option value="">(tất cả type)</option>
-      <option value="PER">PER - Người</option>
-      <option value="LOC">LOC - Địa điểm</option>
-      <option value="ORG">ORG - Tổ chức</option>
-    </select>
-    <select id="q-category">
-      <option value="">(tất cả category)</option>
-    </select>
-    <button onclick="doSearch()">Search</button>
-    <div class="hint" id="search-hint"></div>
+<!-- ==================== TAB: SEARCH ==================== -->
+<div id="tab-search">
+  <div class="page-title">
+    <h1>Tìm kiếm bài báo</h1>
+    <span class="tag">Kịch bản 1</span>
   </div>
-  <div id="search-meta" class="meta"></div>
-  <div id="search-results" class="results"></div>
-</div>
+  <div class="page-subtitle">Elasticsearch full-text và entity search với highlight, role-aware theo alias <code>news_public</code>.</div>
 
-<!-- ============================================================
-  TAB 2: TRENDS
-============================================================ -->
-<div id="tab-trends" class="panel hidden-section">
-  <h2>Phân tích xu hướng (ClickHouse)</h2>
-  <div class="controls">
-    <label>Window (ngày):</label>
-    <select id="t-days">
-      <option value="7">7 ngày</option>
-      <option value="14">14 ngày</option>
-      <option value="30" selected>30 ngày</option>
-      <option value="90">90 ngày</option>
-    </select>
-    <label>Category:</label>
-    <select id="t-category">
-      <option value="">(tất cả)</option>
-    </select>
-    <button onclick="loadTrends()">Reload</button>
-    <div class="hint" id="trends-hint"></div>
+  <div class="panel">
+    <div class="search-group" style="margin-bottom:14px;">
+      <svg width="18" height="18" style="color:var(--text-3);align-self:center;margin-left:8px;"><use href="#i-search"/></svg>
+      <input id="q-text" class="field field--wide" type="search" placeholder='Từ khoá — "Iran", "giá vàng", "AI"...' value="Iran" onkeydown="if(event.key==='Enter')doSearch()">
+      <select id="q-type" class="field sep" onchange="onSearchTypeChange()">
+        <option value="text">Full-text</option>
+        <option value="entity">Entity (NER)</option>
+      </select>
+      <select id="q-entity-type" class="field sep" style="display:none;">
+        <option value="">All types</option>
+        <option value="PER">PER — Người</option>
+        <option value="LOC">LOC — Địa điểm</option>
+        <option value="ORG">ORG — Tổ chức</option>
+      </select>
+      <select id="q-category" class="field sep">
+        <option value="">All categories</option>
+      </select>
+      <button class="btn" onclick="doSearch()">
+        <svg width="14" height="14"><use href="#i-search"/></svg> Tìm
+      </button>
+    </div>
+    <div id="search-meta" class="meta"></div>
   </div>
 
-  <div class="grid-2">
-    <div class="card">
-      <h3>🔥 Top keywords</h3>
-      <canvas id="chart-keywords" height="260"></canvas>
-      <div id="kw-meta" class="meta"></div>
-    </div>
-
-    <div class="card">
-      <h3>📈 Timeline (bài/ngày)</h3>
-      <canvas id="chart-timeline" height="260"></canvas>
-      <div id="timeline-meta" class="meta"></div>
-    </div>
-
-    <div class="card">
-      <h3>🕐 Phân bố theo giờ</h3>
-      <canvas id="chart-hourly" height="260"></canvas>
-      <div id="hourly-meta" class="meta"></div>
-    </div>
-
-    <div class="card">
-      <h3>🚀 Hot spike (multiplier vs tuần trước)</h3>
-      <div id="hot-table"></div>
-      <div id="hot-meta" class="meta"></div>
-    </div>
-  </div>
-
-  <div class="grid-2" style="margin-top: 16px;">
-    <div class="card">
-      <h3>🌍 Top LOC entities</h3>
-      <div id="loc-table"></div>
-      <div id="loc-meta" class="meta"></div>
-    </div>
-    <div class="card">
-      <h3>👤 Top PER entities</h3>
-      <div id="per-table"></div>
-      <div id="per-meta" class="meta"></div>
-    </div>
-  </div>
-
-  <div class="card" style="margin-top: 16px;">
-    <h3>🌐 Cross-source coverage (sự kiện được ≥3 báo đưa)</h3>
-    <div id="xsource-table"></div>
-    <div id="xsource-meta" class="meta"></div>
+  <div class="panel" style="margin-top:var(--gap-3);">
+    <div id="search-results"><div class="empty">
+      <svg width="44" height="44"><use href="#i-inbox"/></svg>
+      Nhập từ khoá và bấm <strong>Tìm</strong> để bắt đầu.
+    </div></div>
   </div>
 </div>
 
-<!-- ============================================================
-  TAB 3: RBAC
-============================================================ -->
-<div id="tab-rbac" class="panel hidden-section">
-  <h2>Phân quyền (Kịch bản 3)</h2>
-  <p style="color: #555; font-size: 13.5px; line-height: 1.6;">
-    Demo: cùng 1 query nhưng kết quả khác nhau giữa <strong>admin</strong> và <strong>guest</strong>.
-    Admin thấy đầy đủ index <code>news_articles</code> bao gồm field <code>author</code>, <code>url</code>.
-    Guest chỉ thấy alias <code>news_public</code> (đã filter <code>is_canonical=true</code>) và bị ẩn các field nhạy cảm.
-  </p>
-
-  <div class="controls">
-    <button onclick="loadRbacStats()">Reload stats</button>
-    <div class="hint">Stats chỉ chạy được khi login bằng <strong>admin</strong></div>
+<!-- ==================== TAB: TRENDS ==================== -->
+<div id="tab-trends" class="hidden-section">
+  <div class="page-title">
+    <h1>Xu hướng tin tức</h1>
+    <span class="tag">Kịch bản 2</span>
   </div>
+  <div class="page-subtitle">Aggregates từ ClickHouse: top keywords, hot spike, phân bố theo giờ, cross-source.</div>
 
-  <div class="grid-3">
-    <div class="card">
-      <h3>Elasticsearch index gốc</h3>
-      <div id="rbac-full" style="font-size: 22px; font-weight: 500; color: #0071e3;">—</div>
-      <div style="font-size: 12px; color: #666; margin-top: 4px;">news_articles (admin view)</div>
-    </div>
-    <div class="card">
-      <h3>Alias news_public</h3>
-      <div id="rbac-public" style="font-size: 22px; font-weight: 500; color: #14b8a6;">—</div>
-      <div style="font-size: 12px; color: #666; margin-top: 4px;">guest view</div>
-    </div>
-    <div class="card">
-      <h3>Hidden by RBAC</h3>
-      <div id="rbac-hidden" style="font-size: 22px; font-weight: 500; color: #ef4444;">—</div>
-      <div style="font-size: 12px; color: #666; margin-top: 4px;">non-canonical duplicates</div>
-    </div>
-  </div>
-
-  <div class="card" style="margin-top: 16px;">
-    <h3>So sánh query cùng bài với 2 role</h3>
+  <div class="panel">
     <div class="controls">
-      <input id="rbac-article-id" type="text" placeholder="article id (dán từ kết quả search)" style="width: 340px;">
-      <button onclick="rbacCompare()">Compare admin vs guest</button>
+      <label>Window:</label>
+      <select id="t-days" class="field" onchange="loadTrends()">
+        <option value="7">7 ngày</option>
+        <option value="14">14 ngày</option>
+        <option value="30" selected>30 ngày</option>
+        <option value="90">90 ngày</option>
+      </select>
+      <label>Category:</label>
+      <select id="t-category" class="field" onchange="loadTrends()">
+        <option value="">Tất cả</option>
+      </select>
+      <button class="btn" onclick="loadTrends()">
+        <svg width="14" height="14"><use href="#i-filter"/></svg> Reload
+      </button>
+      <span class="hint" id="trends-hint" style="margin-left:auto;"></span>
     </div>
-    <div id="rbac-compare"></div>
+  </div>
+
+  <div class="kpi-strip" style="margin-top:var(--gap-3);">
+    <div class="kpi">
+      <div class="kpi-label">Articles (window)</div>
+      <div class="kpi-value" id="kpi-articles">—</div>
+      <div class="kpi-hint" id="kpi-articles-hint">timeline total</div>
+      <div class="kpi-icon"><svg width="16" height="16"><use href="#i-calendar"/></svg></div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label">Unique keywords</div>
+      <div class="kpi-value" id="kpi-keywords">—</div>
+      <div class="kpi-hint">top 15 shown</div>
+      <div class="kpi-icon"><svg width="16" height="16"><use href="#i-tag"/></svg></div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label">Hot spikes</div>
+      <div class="kpi-value" id="kpi-hot">—</div>
+      <div class="kpi-hint">multiplier ≥ 2×</div>
+      <div class="kpi-icon"><svg width="16" height="16"><use href="#i-flame"/></svg></div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label">Cross-source</div>
+      <div class="kpi-value" id="kpi-xsource">—</div>
+      <div class="kpi-hint">≥ 3 báo cùng đưa</div>
+      <div class="kpi-icon"><svg width="16" height="16"><use href="#i-globe"/></svg></div>
+    </div>
+  </div>
+
+  <div class="grid-12">
+    <div class="card">
+      <div class="card-header">
+        <span class="card-icon"><svg width="14" height="14"><use href="#i-trend"/></svg></span>
+        <h3>Timeline — Bài / ngày</h3>
+        <span class="meta" id="timeline-meta"></span>
+      </div>
+      <div class="chart-wrap"><canvas id="chart-timeline"></canvas></div>
+    </div>
+    <div class="card">
+      <div class="card-header">
+        <span class="card-icon"><svg width="14" height="14"><use href="#i-clock"/></svg></span>
+        <h3>Phân bố theo giờ</h3>
+        <span class="meta" id="hourly-meta"></span>
+      </div>
+      <div class="chart-wrap"><canvas id="chart-hourly"></canvas></div>
+    </div>
+  </div>
+
+  <div class="grid-2" style="margin-top:var(--gap-3);">
+    <div class="card">
+      <div class="card-header">
+        <span class="card-icon"><svg width="14" height="14"><use href="#i-tag"/></svg></span>
+        <h3>Top keywords</h3>
+        <span class="meta" id="kw-meta"></span>
+      </div>
+      <div class="chart-wrap tall"><canvas id="chart-keywords"></canvas></div>
+    </div>
+    <div class="card">
+      <div class="card-header">
+        <span class="card-icon" style="background:#fee2e2;color:#b91c1c;"><svg width="14" height="14"><use href="#i-flame"/></svg></span>
+        <h3>Hot spike — tăng vọt</h3>
+        <span class="meta" id="hot-meta"></span>
+      </div>
+      <div id="hot-table"></div>
+    </div>
+  </div>
+
+  <div class="grid-2" style="margin-top:var(--gap-3);">
+    <div class="card">
+      <div class="card-header">
+        <span class="card-icon"><svg width="14" height="14"><use href="#i-pin"/></svg></span>
+        <h3>Top địa điểm (LOC)</h3>
+        <span class="meta" id="loc-meta"></span>
+      </div>
+      <div id="loc-table"></div>
+    </div>
+    <div class="card">
+      <div class="card-header">
+        <span class="card-icon"><svg width="14" height="14"><use href="#i-user"/></svg></span>
+        <h3>Top nhân vật (PER)</h3>
+        <span class="meta" id="per-meta"></span>
+      </div>
+      <div id="per-table"></div>
+    </div>
+  </div>
+
+  <div class="card" style="margin-top:var(--gap-3);">
+    <div class="card-header">
+      <span class="card-icon"><svg width="14" height="14"><use href="#i-globe"/></svg></span>
+      <h3>Cross-source coverage — sự kiện được ≥3 báo đưa tin</h3>
+      <span class="meta" id="xsource-meta"></span>
+    </div>
+    <div id="xsource-table"></div>
+  </div>
+</div>
+
+<!-- ==================== TAB: RBAC ==================== -->
+<div id="tab-rbac" class="hidden-section">
+  <div class="page-title">
+    <h1>Phân quyền RBAC</h1>
+    <span class="tag">Kịch bản 3</span>
+  </div>
+  <div class="page-subtitle">
+    Cùng một query nhưng kết quả khác nhau giữa <strong>admin</strong> và <strong>guest</strong>.
+    Admin thấy index gốc <code>news_articles</code> (có <code>author</code>, <code>url</code>);
+    guest chỉ thấy alias <code>news_public</code> (filter <code>is_canonical=true</code>) và bị ẩn field nhạy cảm.
+  </div>
+
+  <div class="kpi-strip">
+    <div class="kpi">
+      <div class="kpi-label">news_articles (admin)</div>
+      <div class="kpi-value" id="rbac-full">—</div>
+      <div class="kpi-hint">index gốc, canonical + non-canonical</div>
+      <div class="kpi-icon"><svg width="16" height="16"><use href="#i-database"/></svg></div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label">news_public (guest)</div>
+      <div class="kpi-value" id="rbac-public">—</div>
+      <div class="kpi-hint">alias, chỉ canonical</div>
+      <div class="kpi-icon"><svg width="16" height="16"><use href="#i-shield"/></svg></div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label">Hidden by RBAC</div>
+      <div class="kpi-value" id="rbac-hidden">—</div>
+      <div class="kpi-hint">non-canonical duplicates</div>
+      <div class="kpi-icon" style="background:#fee2e2;color:#b91c1c;"><svg width="16" height="16"><use href="#i-eye-off"/></svg></div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label">Your role</div>
+      <div class="kpi-value" id="rbac-role" style="font-size:20px;">anonymous</div>
+      <div class="kpi-hint" id="rbac-role-hint">mở Settings để đăng nhập admin</div>
+      <div class="kpi-icon"><svg width="16" height="16"><use href="#i-user"/></svg></div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-header">
+      <h2>So sánh 2 role trên cùng một article</h2>
+      <span class="help">/admin/stats chỉ chạy được khi login bằng <strong>admin</strong></span>
+    </div>
+    <div class="controls">
+      <input id="rbac-article-id" class="field" type="text" placeholder="Paste article id từ kết quả search..." style="flex:1;max-width:520px;">
+      <button class="btn" onclick="rbacCompare()">
+        <svg width="14" height="14"><use href="#i-link"/></svg> Compare
+      </button>
+      <button class="btn btn--ghost" onclick="loadRbacStats()">Refresh stats</button>
+    </div>
+    <div id="rbac-compare" style="margin-top:14px;">
+      <div class="empty">
+        <svg width="44" height="44"><use href="#i-shield"/></svg>
+        Nhập article id để xem sự khác biệt giữa <strong>admin</strong> và <strong>guest</strong>.
+      </div>
+    </div>
   </div>
 </div>
 
 </div><!-- /container -->
 
 <script>
-// ==========================================================================
+// =========================================================================
 // State
-// ==========================================================================
-let token = localStorage.getItem('token') || '';
-let role = localStorage.getItem('role') || '';
+// =========================================================================
+let token    = localStorage.getItem('token')    || '';
+let role     = localStorage.getItem('role')     || '';
 let username = localStorage.getItem('username') || '';
-const charts = {};  // Chart.js instances cache (destroy trước khi re-render)
+const charts = {};
 
-function apiUrl() {
-  return document.getElementById('api-url').value.replace(/\/$/, '');
-}
+const apiUrl = () => document.getElementById('api-url').value.replace(/\/$/, '');
 
-function updateAuthStatus() {
-  const status = document.getElementById('auth-status');
-  if (token) {
-    status.textContent = `Logged in as ${username} (${role})`;
-    status.className = 'auth-status ' + role;
-  } else {
-    status.textContent = 'Not logged in (anonymous guest)';
-    status.className = 'auth-status';
+// =========================================================================
+// Theme
+// =========================================================================
+function setTheme(t) {
+  document.documentElement.setAttribute('data-theme', t);
+  localStorage.setItem('theme', t);
+  const icon = document.getElementById('theme-icon');
+  icon.innerHTML = t === 'dark' ? '<use href="#i-sun"/>' : '<use href="#i-moon"/>';
+  // Re-render charts to pick up new colors
+  if (document.getElementById('tab-trends') && !document.getElementById('tab-trends').classList.contains('hidden-section')) {
+    loadTrends();
   }
 }
-updateAuthStatus();
+function toggleTheme() {
+  const cur = document.documentElement.getAttribute('data-theme') || 'light';
+  setTheme(cur === 'light' ? 'dark' : 'light');
+}
+setTheme(localStorage.getItem('theme') || 'light');
 
-// ==========================================================================
-// HTTP helper
-// ==========================================================================
+// =========================================================================
+// Auth / user chip
+// =========================================================================
+function refreshUserChip() {
+  const chip   = document.getElementById('user-chip');
+  const avatar = document.getElementById('user-avatar');
+  const name   = document.getElementById('user-name');
+  const badge  = document.getElementById('user-role-badge');
+  if (token) {
+    chip.dataset.role = role;
+    avatar.textContent = (username || '?')[0].toUpperCase();
+    name.textContent = username;
+    badge.className = 'role-badge ' + role;
+    badge.textContent = role;
+  } else {
+    chip.dataset.role = 'guest';
+    avatar.textContent = 'G';
+    name.textContent = 'Guest';
+    badge.className = 'role-badge guest';
+    badge.textContent = 'anon';
+  }
+  const rbacRole = document.getElementById('rbac-role');
+  const rbacHint = document.getElementById('rbac-role-hint');
+  if (rbacRole) {
+    rbacRole.textContent = token ? `${username} · ${role}` : 'anonymous';
+    rbacHint.textContent = role === 'admin' ? '✓ full access' : 'mở Settings để đăng nhập admin';
+  }
+}
+
+function openSettings()  { document.getElementById('drawer').classList.add('open'); document.getElementById('drawer-bg').classList.add('open'); }
+function closeSettings() { document.getElementById('drawer').classList.remove('open'); document.getElementById('drawer-bg').classList.remove('open'); }
+
+function quickLogin(u, p) {
+  document.getElementById('username').value = u;
+  document.getElementById('password').value = p;
+  login();
+}
+
+async function login() {
+  const u = document.getElementById('username').value;
+  const p = document.getElementById('password').value;
+  const msg = document.getElementById('auth-msg');
+  msg.innerHTML = '<span class="loading"><span class="spinner"></span>Authenticating…</span>';
+  try {
+    const data = await api('/auth/login', {
+      method: 'POST',
+      body: JSON.stringify({ username: u, password: p }),
+    });
+    token = data.access_token; role = data.role; username = data.username;
+    localStorage.setItem('token', token);
+    localStorage.setItem('role', role);
+    localStorage.setItem('username', username);
+    refreshUserChip();
+    msg.innerHTML = `<span style="color:var(--success);">✓ Signed in as <strong>${username}</strong> (${role})</span>`;
+    loadCategories();
+    loadRbacStats();
+    setTimeout(closeSettings, 700);
+  } catch (e) {
+    msg.innerHTML = `<span style="color:var(--danger);">✗ ${e.message}</span>`;
+  }
+}
+
+function logout() {
+  token = ''; role = ''; username = '';
+  localStorage.clear();
+  // keep theme/api-url preferences
+  localStorage.setItem('theme', document.documentElement.getAttribute('data-theme'));
+  refreshUserChip();
+  document.getElementById('auth-msg').innerHTML = 'Signed out.';
+}
+
+refreshUserChip();
+
+// =========================================================================
+// HTTP
+// =========================================================================
 async function api(path, opts = {}) {
   const headers = opts.headers || {};
   if (token) headers['Authorization'] = `Bearer ${token}`;
-  if (opts.body && !(opts.body instanceof FormData)) {
-    headers['Content-Type'] = 'application/json';
-  }
+  if (opts.body && !(opts.body instanceof FormData)) headers['Content-Type'] = 'application/json';
   const res = await fetch(apiUrl() + path, { ...opts, headers });
   if (!res.ok) {
     const msg = await res.text();
@@ -353,72 +1025,62 @@ async function api(path, opts = {}) {
   return res.json();
 }
 
-// ==========================================================================
-// AUTH
-// ==========================================================================
-async function login() {
-  const u = document.getElementById('username').value;
-  const p = document.getElementById('password').value;
-  try {
-    const data = await api('/auth/login', {
-      method: 'POST',
-      body: JSON.stringify({ username: u, password: p }),
-    });
-    token = data.access_token;
-    role = data.role;
-    username = data.username;
-    localStorage.setItem('token', token);
-    localStorage.setItem('role', role);
-    localStorage.setItem('username', username);
-    updateAuthStatus();
-    loadCategories();
-  } catch (e) {
-    alert('Login failed: ' + e.message);
-  }
-}
-
-function logout() {
-  token = ''; role = ''; username = '';
-  localStorage.clear();
-  updateAuthStatus();
-}
-
-// ==========================================================================
-// TABS
-// ==========================================================================
-function showTab(id) {
+// =========================================================================
+// Tabs
+// =========================================================================
+function showTab(id, el) {
   ['tab-search', 'tab-trends', 'tab-rbac'].forEach(t => {
     document.getElementById(t).classList.toggle('hidden-section', t !== id);
   });
-  document.querySelectorAll('.tab').forEach(el => el.classList.remove('active'));
-  event.target.classList.add('active');
+  document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
+  (el || document.querySelector(`.nav-tab[data-tab="${id}"]`)).classList.add('active');
   if (id === 'tab-trends') loadTrends();
-  if (id === 'tab-rbac') loadRbacStats();
+  if (id === 'tab-rbac')  loadRbacStats();
 }
 
-// ==========================================================================
-// CATEGORIES (populate dropdowns)
-// ==========================================================================
+// =========================================================================
+// Categories
+// =========================================================================
 async function loadCategories() {
   try {
     const data = await api('/admin/categories');
-    const options = '<option value="">(tất cả)</option>' +
-      data.results.map(r => `<option value="${r.category}">${r.category} (${r.count})</option>`).join('');
-    document.getElementById('q-category').innerHTML = options;
-    document.getElementById('t-category').innerHTML = options;
-  } catch (e) {
-    console.warn('loadCategories failed:', e.message);
-  }
+    const opts = '<option value="">All categories</option>' +
+      data.results.map(r => `<option value="${r.category}">${r.category} (${r.count.toLocaleString()})</option>`).join('');
+    document.getElementById('q-category').innerHTML = opts;
+    const t = document.getElementById('t-category');
+    const opts2 = '<option value="">Tất cả</option>' +
+      data.results.map(r => `<option value="${r.category}">${r.category}</option>`).join('');
+    t.innerHTML = opts2;
+  } catch (e) { console.warn('loadCategories:', e.message); }
 }
 loadCategories();
 
-// ==========================================================================
-// SEARCH (KB1)
-// ==========================================================================
-document.getElementById('q-type').addEventListener('change', (e) => {
+// =========================================================================
+// Helpers
+// =========================================================================
+function escapeHtml(s) {
+  if (s == null) return '';
+  const d = document.createElement('div'); d.textContent = s; return d.innerHTML;
+}
+function killChart(k) { if (charts[k]) { charts[k].destroy(); delete charts[k]; } }
+
+function chartColors() {
+  const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+  return {
+    text:  isDark ? '#9ca3af' : '#4b5563',
+    grid:  isDark ? '#1f2742' : '#eef0f4',
+    brand: '#2563eb',
+    brand2:'#7c3aed',
+  };
+}
+
+// =========================================================================
+// Search
+// =========================================================================
+function onSearchTypeChange() {
   document.getElementById('q-entity-type').style.display =
-    e.target.value === 'entity' ? 'inline-block' : 'none';
-});
+    document.getElementById('q-type').value === 'entity' ? 'inline-block' : 'none';
+}
 
 async function doSearch() {
   const q = document.getElementById('q-text').value.trim();
@@ -428,261 +1090,334 @@ async function doSearch() {
   const category = document.getElementById('q-category').value;
 
   const results = document.getElementById('search-results');
-  results.innerHTML = '<div class="loading">Đang tìm...</div>';
+  results.innerHTML = skeletonList(4);
+  document.getElementById('search-meta').innerHTML =
+    '<span class="loading"><span class="spinner"></span>Đang tìm…</span>';
 
   try {
     let url;
     if (type === 'entity') {
       url = `/search/by-entity?text=${encodeURIComponent(q)}&size=20`;
       if (entityType) url += `&type=${entityType}`;
-      if (category) url += `&category=${encodeURIComponent(category)}`;
+      if (category)   url += `&category=${encodeURIComponent(category)}`;
     } else {
       url = `/search?q=${encodeURIComponent(q)}&size=20`;
       if (category) url += `&category=${encodeURIComponent(category)}`;
     }
     const data = await api(url);
 
-    document.getElementById('search-meta').innerHTML =
-      `Tìm thấy <strong>${data.total.toLocaleString()}</strong> bài trong ` +
-      `<span class="ms">${data.took_ms} ms</span> · ` +
-      `index: <code>${data.index_used}</code> · role: <code>${data.role}</code>`;
-    document.getElementById('search-hint').textContent = `query: ${data.query}`;
+    document.getElementById('search-meta').innerHTML = `
+      <span class="badge">${data.total.toLocaleString()} kết quả</span>
+      <span class="meta" style="margin-left:8px;">
+        <span class="ms">${data.took_ms} ms</span> ·
+        index <code>${data.index_used}</code> · role <code>${data.role}</code>
+      </span>`;
 
     if (!data.results.length) {
-      results.innerHTML = '<div class="empty">Không có kết quả</div>';
+      results.innerHTML = `<div class="empty">
+        <svg width="44" height="44"><use href="#i-inbox"/></svg>
+        Không có kết quả cho "<strong>${escapeHtml(q)}</strong>".
+      </div>`;
       return;
     }
 
     results.innerHTML = data.results.map(r => `
-      <div class="article">
-        <div class="article-title" onclick="viewArticle('${r.id}')">${escapeHtml(r.title)}</div>
+      <div class="article" onclick="viewArticle('${r.id}')">
+        <div class="article-title">${escapeHtml(r.title)}</div>
         <div class="article-meta">
-          <span class="badge">${r.source || '?'}</span>
-          <span class="badge category">${r.category_normalized || 'other'}</span>
-          ${r.publish_date ? `<span>${r.publish_date}</span>` : ''}
-          ${r.author ? `<span class="badge author">✍ ${escapeHtml(r.author)}</span>` : (role === 'guest' ? '<span class="badge hidden">author (hidden)</span>' : '')}
-          ${r.score ? `<span>score: ${r.score.toFixed(2)}</span>` : ''}
+          <span class="badge"><svg width="10" height="10"><use href="#i-globe"/></svg> ${escapeHtml(r.source || '?')}</span>
+          <span class="badge category">${escapeHtml(r.category_normalized || 'other')}</span>
+          ${r.publish_date ? `<span class="meta"><svg width="11" height="11" style="vertical-align:-1px;"><use href="#i-calendar"/></svg> ${r.publish_date}</span>` : ''}
+          ${r.author ? `<span class="badge author">✍ ${escapeHtml(r.author)}</span>`
+                    : (role === 'guest' ? '<span class="badge hidden"><svg width="10" height="10"><use href="#i-eye-off"/></svg> author ẩn</span>' : '')}
+          ${r.score ? `<span class="badge score">score ${r.score.toFixed(2)}</span>` : ''}
         </div>
         ${r.highlight ? `<div class="article-snippet">${r.highlight}</div>` : ''}
       </div>
     `).join('');
   } catch (e) {
-    results.innerHTML = `<div class="error">${e.message}</div>`;
+    document.getElementById('search-meta').innerHTML = '';
+    results.innerHTML = `<div class="error">${escapeHtml(e.message)}</div>`;
   }
+}
+
+function skeletonList(n) {
+  return Array.from({length: n}).map(() => `
+    <div class="article" style="cursor:default;">
+      <div class="skeleton" style="height:16px;width:65%;margin-bottom:10px;"></div>
+      <div class="skeleton" style="height:10px;width:40%;margin-bottom:8px;"></div>
+      <div class="skeleton" style="height:10px;width:95%;"></div>
+    </div>`).join('');
 }
 
 async function viewArticle(id) {
   try {
     const a = await api('/articles/' + id);
-    const ents = a.entities.map(e =>
-      `<span class="entity-chip ${e.type}">${escapeHtml(e.text)} · ${e.type}</span>`
-    ).join('');
-    const kws = a.keywords.map(k => `<span class="entity-chip MISC">${escapeHtml(k)}</span>`).join('');
-
+    const ents = a.entities.map(e => `<span class="entity-chip ${e.type}">${escapeHtml(e.text)} · ${e.type}</span>`).join('');
+    const kws  = a.keywords.map(k => `<span class="entity-chip MISC">${escapeHtml(k)}</span>`).join('');
     const existing = document.getElementById('article-modal');
     if (existing) existing.remove();
 
-    const modal = document.createElement('div');
-    modal.id = 'article-modal';
-    modal.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:100;display:flex;align-items:center;justify-content:center;padding:20px;';
-    modal.onclick = (e) => { if (e.target === modal) modal.remove(); };
-    modal.innerHTML = `
-      <div style="background:white;border-radius:10px;padding:24px;max-width:800px;width:100%;max-height:85vh;overflow-y:auto;">
-        <div style="display:flex;justify-content:space-between;align-items:start;margin-bottom:10px;">
-          <h2 style="margin:0;font-size:18px;font-weight:500;">${escapeHtml(a.title)}</h2>
-          <button onclick="document.getElementById('article-modal').remove()" style="background:none;border:none;font-size:24px;cursor:pointer;line-height:1;">×</button>
+    const backdrop = document.createElement('div');
+    backdrop.className = 'modal-backdrop'; backdrop.id = 'article-modal';
+    backdrop.onclick = (e) => { if (e.target === backdrop) backdrop.remove(); };
+    backdrop.innerHTML = `
+      <div class="modal">
+        <div class="modal-header">
+          <h2>${escapeHtml(a.title)}</h2>
+          <button class="modal-close" onclick="document.getElementById('article-modal').remove()">
+            <svg width="16" height="16"><use href="#i-close"/></svg>
+          </button>
         </div>
-        <div class="article-meta" style="margin-bottom:10px;">
-          <span class="badge">${a.source}</span>
-          <span class="badge category">${a.category_normalized}</span>
-          ${a.publish_date ? `<span>${a.publish_date}</span>` : ''}
+        <div class="article-meta">
+          <span class="badge"><svg width="10" height="10"><use href="#i-globe"/></svg> ${escapeHtml(a.source)}</span>
+          <span class="badge category">${escapeHtml(a.category_normalized)}</span>
+          ${a.publish_date ? `<span class="meta"><svg width="11" height="11" style="vertical-align:-1px;"><use href="#i-calendar"/></svg> ${a.publish_date}</span>` : ''}
           ${a.author ? `<span class="badge author">✍ ${escapeHtml(a.author)}</span>` : ''}
-          ${a.url ? `<a href="${a.url}" target="_blank" style="color:#0071e3;">↗ nguồn</a>` : ''}
+          ${a.url ? `<a href="${a.url}" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:4px;"><svg width="12" height="12"><use href="#i-link"/></svg> nguồn</a>` : ''}
         </div>
-        ${kws ? `<div><strong style="font-size:13px;">Keywords:</strong><div class="entities-grid">${kws}</div></div>` : ''}
-        ${ents ? `<div style="margin-top:10px;"><strong style="font-size:13px;">Entities (${a.entities.length}):</strong><div class="entities-grid">${ents}</div></div>` : ''}
-        <div class="detail-content">${escapeHtml(a.content)}</div>
-      </div>
-    `;
-    document.body.appendChild(modal);
+        ${kws ? `<div style="margin-top:10px;"><div style="font-size:12px;color:var(--text-3);font-weight:600;text-transform:uppercase;letter-spacing:.06em;">Keywords</div><div class="entities-grid">${kws}</div></div>` : ''}
+        ${ents ? `<div style="margin-top:12px;"><div style="font-size:12px;color:var(--text-3);font-weight:600;text-transform:uppercase;letter-spacing:.06em;">Entities (${a.entities.length})</div><div class="entities-grid">${ents}</div></div>` : ''}
+        <div class="modal-body">${escapeHtml(a.content)}</div>
+      </div>`;
+    document.body.appendChild(backdrop);
   } catch (e) {
     alert('Error: ' + e.message);
   }
 }
 
-function escapeHtml(s) {
-  if (!s) return '';
-  const div = document.createElement('div');
-  div.textContent = s;
-  return div.innerHTML;
-}
-
-// ==========================================================================
-// TRENDS (KB2)
-// ==========================================================================
-function killChart(key) {
-  if (charts[key]) { charts[key].destroy(); delete charts[key]; }
-}
-
+// =========================================================================
+// Trends
+// =========================================================================
 async function loadTrends() {
   const days = document.getElementById('t-days').value;
   const category = document.getElementById('t-category').value;
-  document.getElementById('trends-hint').textContent = `window: ${days}d${category ? ', category=' + category : ''}`;
+  document.getElementById('trends-hint').textContent = `window: ${days}d${category ? ' · ' + category : ''}`;
 
-  // === Top keywords (bar chart horizontal)
+  const setLoading = (id) => document.getElementById(id).innerHTML =
+    '<span class="loading"><span class="spinner"></span></span>';
+
+  ['kw-meta','timeline-meta','hourly-meta','hot-meta','loc-meta','per-meta','xsource-meta']
+    .forEach(setLoading);
+
+  const cols = chartColors();
+
+  // Top keywords
   try {
     let url = `/trends/top-keywords?days=${days}&limit=15`;
     if (category) url += `&category=${encodeURIComponent(category)}`;
     const data = await api(url);
     document.getElementById('kw-meta').innerHTML = `<span class="ms">${data.took_ms} ms</span>`;
-    renderBarChart('chart-keywords', data.results.map(r => r.keyword), data.results.map(r => r.count));
-  } catch (e) { document.getElementById('kw-meta').innerHTML = `<span style="color:#dc2626;">${e.message}</span>`; }
+    document.getElementById('kpi-keywords').textContent = data.results.length.toLocaleString();
+    renderBarChart('chart-keywords', data.results.map(r => r.keyword), data.results.map(r => r.count), { horizontal: true, cols });
+  } catch (e) {
+    document.getElementById('kw-meta').innerHTML = `<span style="color:var(--danger);">${escapeHtml(e.message)}</span>`;
+    document.getElementById('kpi-keywords').textContent = '—';
+  }
 
-  // === Timeline
+  // Timeline
   try {
     let url = `/trends/timeline?days=${days}`;
     if (category) url += `&category=${encodeURIComponent(category)}`;
     const data = await api(url);
     document.getElementById('timeline-meta').innerHTML = `<span class="ms">${data.took_ms} ms</span>`;
-    renderLineChart('chart-timeline', data.results.map(r => r.date), data.results.map(r => r.count));
-  } catch (e) { document.getElementById('timeline-meta').innerHTML = `<span style="color:#dc2626;">${e.message}</span>`; }
+    const total = data.results.reduce((a, r) => a + r.count, 0);
+    document.getElementById('kpi-articles').textContent = total.toLocaleString();
+    document.getElementById('kpi-articles-hint').textContent = `${data.results.length} ngày có data`;
+    renderLineChart('chart-timeline', data.results.map(r => r.date), data.results.map(r => r.count), { cols });
+  } catch (e) {
+    document.getElementById('timeline-meta').innerHTML = `<span style="color:var(--danger);">${escapeHtml(e.message)}</span>`;
+    document.getElementById('kpi-articles').textContent = '—';
+  }
 
-  // === Hourly
+  // Hourly
   try {
     const data = await api(`/trends/hourly?days=${days}`);
     document.getElementById('hourly-meta').innerHTML = `<span class="ms">${data.took_ms} ms</span>`;
-    renderBarChart('chart-hourly', data.results.map(r => r.hour + 'h'), data.results.map(r => r.count), { horizontal: false });
-  } catch (e) { document.getElementById('hourly-meta').innerHTML = `<span style="color:#dc2626;">${e.message}</span>`; }
+    renderBarChart('chart-hourly', data.results.map(r => r.hour + 'h'), data.results.map(r => r.count), { horizontal: false, cols, gradient: true });
+  } catch (e) {
+    document.getElementById('hourly-meta').innerHTML = `<span style="color:var(--danger);">${escapeHtml(e.message)}</span>`;
+  }
 
-  // === Hot keywords
+  // Hot
   try {
     const data = await api(`/trends/hot?window_days=${Math.min(days, 14)}&limit=10`);
     document.getElementById('hot-meta').innerHTML = `<span class="ms">${data.took_ms} ms</span>`;
+    document.getElementById('kpi-hot').textContent = data.results.filter(r => r.multiplier >= 2).length.toLocaleString();
     renderHotTable('hot-table', data.results);
-  } catch (e) { document.getElementById('hot-meta').innerHTML = `<span style="color:#dc2626;">${e.message}</span>`; }
+  } catch (e) {
+    document.getElementById('hot-meta').innerHTML = `<span style="color:var(--danger);">${escapeHtml(e.message)}</span>`;
+    document.getElementById('kpi-hot').textContent = '—';
+  }
 
-  // === Top entities (LOC + PER)
+  // Entities
   try {
     const data = await api(`/trends/top-entities?entity_type=LOC&days=${days}&limit=10`);
     document.getElementById('loc-meta').innerHTML = `<span class="ms">${data.took_ms} ms</span>`;
     renderEntityTable('loc-table', data.results);
-  } catch (e) { document.getElementById('loc-meta').innerHTML = `<span style="color:#dc2626;">${e.message}</span>`; }
+  } catch (e) { document.getElementById('loc-meta').innerHTML = `<span style="color:var(--danger);">${escapeHtml(e.message)}</span>`; }
+
   try {
     const data = await api(`/trends/top-entities?entity_type=PER&days=${days}&limit=10`);
     document.getElementById('per-meta').innerHTML = `<span class="ms">${data.took_ms} ms</span>`;
     renderEntityTable('per-table', data.results);
-  } catch (e) { document.getElementById('per-meta').innerHTML = `<span style="color:#dc2626;">${e.message}</span>`; }
+  } catch (e) { document.getElementById('per-meta').innerHTML = `<span style="color:var(--danger);">${escapeHtml(e.message)}</span>`; }
 
-  // === Cross-source
+  // Cross-source
   try {
     const data = await api(`/trends/cross-source?days=${days}&min_sources=3&limit=15`);
     document.getElementById('xsource-meta').innerHTML = `<span class="ms">${data.took_ms} ms</span>`;
+    document.getElementById('kpi-xsource').textContent = data.results.length.toLocaleString();
     renderXSourceTable('xsource-table', data.results);
-  } catch (e) { document.getElementById('xsource-meta').innerHTML = `<span style="color:#dc2626;">${e.message}</span>`; }
+  } catch (e) {
+    document.getElementById('xsource-meta').innerHTML = `<span style="color:var(--danger);">${escapeHtml(e.message)}</span>`;
+    document.getElementById('kpi-xsource').textContent = '—';
+  }
 }
 
+// =========================================================================
+// Chart renderers
+// =========================================================================
 function renderBarChart(canvasId, labels, values, opts = {}) {
   killChart(canvasId);
   const ctx = document.getElementById(canvasId);
+  const cols = opts.cols || chartColors();
+  let bg = cols.brand;
+  if (opts.gradient) {
+    const g = ctx.getContext('2d').createLinearGradient(0, 0, 0, 300);
+    g.addColorStop(0, cols.brand); g.addColorStop(1, cols.brand2);
+    bg = g;
+  }
   charts[canvasId] = new Chart(ctx, {
     type: 'bar',
-    data: {
-      labels,
-      datasets: [{
-        data: values,
-        backgroundColor: '#0071e3',
-        borderRadius: 4,
-      }],
-    },
+    data: { labels, datasets: [{ data: values, backgroundColor: bg, borderRadius: 6, borderSkipped: false }] },
     options: {
-      indexAxis: opts.horizontal === false ? 'x' : 'y',
-      responsive: true,
-      plugins: { legend: { display: false } },
+      indexAxis: opts.horizontal ? 'y' : 'x',
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: { backgroundColor: '#111827', padding: 10, cornerRadius: 8 },
+      },
       scales: {
-        x: { grid: { display: false } },
-        y: { grid: { color: '#f0f0f0' } },
+        x: { grid: { display: false }, ticks: { color: cols.text, font: { size: 11 } } },
+        y: { grid: { color: cols.grid, drawBorder: false }, ticks: { color: cols.text, font: { size: 11 } } },
       },
     },
   });
 }
 
-function renderLineChart(canvasId, labels, values) {
+function renderLineChart(canvasId, labels, values, opts = {}) {
   killChart(canvasId);
   const ctx = document.getElementById(canvasId);
+  const cols = opts.cols || chartColors();
+  const g = ctx.getContext('2d').createLinearGradient(0, 0, 0, 260);
+  g.addColorStop(0, 'rgba(37,99,235,0.32)');
+  g.addColorStop(1, 'rgba(37,99,235,0.02)');
   charts[canvasId] = new Chart(ctx, {
     type: 'line',
-    data: {
-      labels,
-      datasets: [{
-        data: values,
-        borderColor: '#0071e3',
-        backgroundColor: 'rgba(0,113,227,0.1)',
-        fill: true,
-        tension: 0.3,
-        pointRadius: 3,
-      }],
-    },
+    data: { labels, datasets: [{
+      data: values,
+      borderColor: cols.brand,
+      backgroundColor: g,
+      fill: true, tension: 0.35,
+      pointRadius: 0, pointHoverRadius: 5,
+      pointBackgroundColor: cols.brand, pointBorderColor: '#fff', pointBorderWidth: 2,
+      borderWidth: 2.5,
+    }] },
     options: {
-      responsive: true,
-      plugins: { legend: { display: false } },
-      scales: { x: { grid: { display: false } } },
+      responsive: true, maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { display: false },
+        tooltip: { backgroundColor: '#111827', padding: 10, cornerRadius: 8 },
+      },
+      scales: {
+        x: { grid: { display: false }, ticks: { color: cols.text, font: { size: 11 }, maxTicksLimit: 10 } },
+        y: { grid: { color: cols.grid, drawBorder: false }, ticks: { color: cols.text, font: { size: 11 } } },
+      },
     },
   });
 }
 
+// =========================================================================
+// Tables
+// =========================================================================
 function renderHotTable(id, rows) {
-  if (!rows.length) { document.getElementById(id).innerHTML = '<div class="empty">Không có data (cần >= 14 ngày)</div>'; return; }
-  const html = `
+  if (!rows.length) {
+    document.getElementById(id).innerHTML = `<div class="empty">
+      <svg width="40" height="40"><use href="#i-flame"/></svg>
+      Chưa đủ data cho spike detection (cần ≥ 14 ngày).
+    </div>`;
+    return;
+  }
+  const max = Math.max(...rows.map(r => r.count_now));
+  document.getElementById(id).innerHTML = `
     <table>
       <thead><tr><th>Keyword</th><th class="num">Now</th><th class="num">Prev</th><th class="num">×</th></tr></thead>
       <tbody>${rows.map(r => {
         const cls = r.multiplier >= 5 ? 'hot' : r.multiplier >= 2 ? 'warm' : 'normal';
+        const bar = Math.max(4, Math.round((r.count_now / max) * 80));
         return `<tr>
-          <td>${escapeHtml(r.keyword)}</td>
-          <td class="num">${r.count_now}</td>
-          <td class="num">${r.count_prev}</td>
+          <td><span class="mini-bar" style="width:${bar}px;"></span>${escapeHtml(r.keyword)}</td>
+          <td class="num">${r.count_now.toLocaleString()}</td>
+          <td class="num">${r.count_prev.toLocaleString()}</td>
           <td class="num"><span class="mult-badge ${cls}">${r.multiplier}×</span></td>
         </tr>`;
       }).join('')}</tbody>
     </table>`;
-  document.getElementById(id).innerHTML = html;
 }
 
 function renderEntityTable(id, rows) {
-  if (!rows.length) { document.getElementById(id).innerHTML = '<div class="empty">—</div>'; return; }
+  if (!rows.length) {
+    document.getElementById(id).innerHTML = '<div class="empty">Không có data trong khoảng thời gian này.</div>';
+    return;
+  }
+  const max = Math.max(...rows.map(r => r.count));
   document.getElementById(id).innerHTML = `
     <table>
       <thead><tr><th>Entity</th><th class="num">Count</th></tr></thead>
-      <tbody>${rows.map(r => `<tr><td>${escapeHtml(r.text)}</td><td class="num">${r.count}</td></tr>`).join('')}</tbody>
+      <tbody>${rows.map(r => {
+        const bar = Math.max(4, Math.round((r.count / max) * 100));
+        return `<tr>
+          <td><span class="mini-bar" style="width:${bar}px;"></span>${escapeHtml(r.text)}</td>
+          <td class="num">${r.count.toLocaleString()}</td>
+        </tr>`;
+      }).join('')}</tbody>
     </table>`;
 }
 
 function renderXSourceTable(id, rows) {
-  if (!rows.length) { document.getElementById(id).innerHTML = '<div class="empty">Không có sự kiện nào được >= 3 báo cùng đưa</div>'; return; }
+  if (!rows.length) {
+    document.getElementById(id).innerHTML = `<div class="empty">
+      <svg width="40" height="40"><use href="#i-globe"/></svg>
+      Không có sự kiện nào được ≥ 3 báo đồng thời đưa tin.
+    </div>`;
+    return;
+  }
   document.getElementById(id).innerHTML = `
     <table>
       <thead><tr><th>Keyword</th><th class="num">Số nguồn</th><th class="num">Tổng mentions</th></tr></thead>
       <tbody>${rows.map(r => `<tr>
         <td>${escapeHtml(r.keyword)}</td>
-        <td class="num">${r.source_count}</td>
-        <td class="num">${r.total_mentions}</td>
+        <td class="num"><span class="mult-badge warm">${r.source_count}</span></td>
+        <td class="num">${r.total_mentions.toLocaleString()}</td>
       </tr>`).join('')}</tbody>
     </table>`;
 }
 
-// ==========================================================================
-// RBAC (KB3)
-// ==========================================================================
+// =========================================================================
+// RBAC
+// =========================================================================
 async function loadRbacStats() {
   try {
     const s = await api('/admin/stats');
-    document.getElementById('rbac-full').textContent = s.es_full_count.toLocaleString();
+    document.getElementById('rbac-full').textContent   = s.es_full_count.toLocaleString();
     document.getElementById('rbac-public').textContent = s.es_public_count.toLocaleString();
     document.getElementById('rbac-hidden').textContent = s.hidden_by_rbac.toLocaleString();
   } catch (e) {
-    document.getElementById('rbac-full').textContent = '—';
+    document.getElementById('rbac-full').textContent   = '—';
     document.getElementById('rbac-public').textContent = '—';
-    document.getElementById('rbac-hidden').innerHTML = `<div style="font-size:13px;color:#dc2626;">${e.message.includes('403') ? 'Cần login admin' : e.message}</div>`;
+    document.getElementById('rbac-hidden').textContent = role === 'admin' ? '—' : '🔒';
   }
 }
 
@@ -690,40 +1425,62 @@ async function rbacCompare() {
   const aid = document.getElementById('rbac-article-id').value.trim();
   if (!aid) return;
   const box = document.getElementById('rbac-compare');
-  box.innerHTML = '<div class="loading">Đang fetch với cả 2 role...</div>';
+  box.innerHTML = '<div class="loading"><span class="spinner"></span>Đang fetch với cả 2 role…</div>';
 
-  // Save current state
-  const origToken = token, origRole = role;
-
+  const origToken = token;
+  let adminData = null, guestData = null;
   try {
-    // 1. As admin (hoặc current token)
-    let adminData = null;
     try { adminData = await api('/articles/' + aid); } catch (e) { adminData = { error: e.message }; }
-
-    // 2. As anonymous guest (clear token temporarily)
-    const savedToken = token;
     token = '';
-    let guestData = null;
     try { guestData = await api('/articles/' + aid); } catch (e) { guestData = { error: e.message }; }
-    token = savedToken;
-
-    const fmt = (d) => d.error ? `<span style="color:#dc2626;">${d.error}</span>`
-      : `<pre style="font-size:12px;background:#f9f9fb;padding:10px;border-radius:4px;overflow:auto;max-height:320px;">${escapeHtml(JSON.stringify(d, null, 2))}</pre>`;
-
-    box.innerHTML = `
-      <div class="grid-2">
-        <div class="card"><h3>👑 Admin view (${role || 'current token'})</h3>${fmt(adminData)}</div>
-        <div class="card"><h3>👤 Anonymous guest view</h3>${fmt(guestData)}</div>
-      </div>
-      <div style="margin-top:10px;font-size:13px;color:#666;">
-        Chú ý: các field <code>author</code>, <code>url</code>, <code>crawled_at</code> bị ẩn khỏi guest.
-        Nếu article không canonical (<code>is_canonical=false</code>), guest sẽ nhận 404.
-      </div>
-    `;
   } finally {
     token = origToken;
   }
+
+  box.innerHTML = renderRbacDiff(adminData, guestData);
 }
+
+function renderRbacDiff(a, g) {
+  if (a.error && g.error) {
+    return `<div class="error">Cả 2 role đều lỗi: admin=${escapeHtml(a.error)}, guest=${escapeHtml(g.error)}</div>`;
+  }
+  const keys = ['title', 'source', 'category_normalized', 'publish_date', 'author', 'url', 'crawled_at', 'is_canonical'];
+  const row = (k, v, other) => {
+    if (v === undefined || v === null || v === '') return `<dd class="missing">— ẩn —</dd>`;
+    if (other !== undefined && other !== null && other !== '' && JSON.stringify(v) !== JSON.stringify(other)) {
+      return `<dd class="diff">${escapeHtml(String(v))}</dd>`;
+    }
+    return `<dd>${escapeHtml(String(v))}</dd>`;
+  };
+  const paneBody = (d, other, title, kind) => {
+    if (d.error) {
+      return `<div class="rbac-pane ${kind}"><h4>${title}</h4><div class="error">${escapeHtml(d.error)}</div></div>`;
+    }
+    const rows = keys.map(k => `<dt>${k}</dt>${row(k, d[k], other?.[k])}`).join('');
+    return `<div class="rbac-pane ${kind}">
+      <h4>${title}</h4>
+      <dl class="kv">${rows}</dl>
+    </div>`;
+  };
+  return `
+    <div class="rbac-roles">
+      ${paneBody(a, g.error ? null : g, '<svg width="12" height="12" style="vertical-align:-1px;"><use href="#i-user"/></svg> Admin view', 'admin')}
+      ${paneBody(g, a.error ? null : a, '<svg width="12" height="12" style="vertical-align:-1px;"><use href="#i-user"/></svg> Anonymous guest view', 'guest')}
+    </div>
+    <div class="hint" style="margin-top:10px;">
+      <strong>Đỏ gạch</strong> = ẩn bởi RBAC · <strong>vàng</strong> = khác giá trị giữa 2 role.
+      Nếu article không canonical, guest sẽ nhận 404.
+    </div>`;
+}
+
+// ESC closes modal/drawer
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') {
+    const m = document.getElementById('article-modal');
+    if (m) m.remove();
+    closeSettings();
+  }
+});
 </script>
 </body>
 </html>

@@ -14,7 +14,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from backend.config import get_settings
 from backend.routers import auth, search, trends, admin
-from backend.deps.clients import get_es, get_ch
+from backend.deps.clients import get_es, new_ch_client
 
 
 @asynccontextmanager
@@ -30,9 +30,12 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         print(f"⚠ ES error: {e}")
     try:
-        ch = get_ch()
-        v = ch.execute("SELECT version()")[0][0]
-        print(f"✓ ClickHouse {v}: {s.CH_HOST}:{s.CH_PORT}")
+        ch = new_ch_client()
+        try:
+            v = ch.execute("SELECT version()")[0][0]
+            print(f"✓ ClickHouse {v}: {s.CH_HOST}:{s.CH_PORT}")
+        finally:
+            ch.disconnect()
     except Exception as e:
         print(f"⚠ CH error: {e}")
     yield
@@ -86,15 +89,20 @@ def root():
 @app.get("/health", tags=["meta"])
 def health():
     es = get_es()
-    ch = get_ch()
     status = {"api": "ok"}
     try:
         status["es"] = "ok" if es.ping() else "down"
     except Exception as e:
         status["es"] = f"error: {e}"
+    ch = new_ch_client()
     try:
         ch.execute("SELECT 1")
         status["ch"] = "ok"
     except Exception as e:
         status["ch"] = f"error: {e}"
+    finally:
+        try:
+            ch.disconnect()
+        except Exception:
+            pass
     return status

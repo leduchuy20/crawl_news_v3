@@ -269,14 +269,15 @@ def timeline(
 
 @router.get("/cross-source", response_model=CrossSourceResponse)
 def cross_source(
-    days: int = Query(7, ge=1, le=60),
+    days: int = Query(7, ge=1, le=365),
     min_sources: int = Query(3, ge=2, le=20),
     limit: int = Query(20, ge=1, le=100),
     ch: CHClient = Depends(get_ch),
 ):
+    # Query từ keyword_events (raw) vì daily_keyword_stats không có cột source
     sql = """
-        SELECT keyword, uniqExact(source) AS sc, sum(mention_count) AS tm
-        FROM news.daily_keyword_stats
+        SELECT keyword, uniqExact(source) AS sc, count() AS tm
+        FROM news.keyword_events
         WHERE publish_date >= today() - %(d)s
         GROUP BY keyword
         HAVING sc >= %(ms)s
