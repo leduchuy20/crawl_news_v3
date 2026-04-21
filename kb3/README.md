@@ -154,3 +154,66 @@ cd ../main_process && make all    # chạy full pipeline trước
 
 **403 khi vào tab RBAC:**
 Chưa login hoặc login với role `guest`. Login lại bằng `admin` / `admin123`.
+
+## Bước 0 — Đảm bảo stack ES + ClickHouse đã up
+
+cd main_process
+docker-compose up -d
+docker ps              # phải thấy news-es, news-ch, news-kibana
+Nếu chưa có data → chạy 01→03 trước.
+
+## Bước 1 — Cài backend deps (lần đầu)
+
+cd kb3
+make install
+
+Hoặc thủ công:
+pip install -r backend/requirements.txt
+
+## Bước 2 — Chạy backend (Terminal 1)
+
+cd kb3
+make dev
+Hoặc thủ công (nếu không dùng make):
+cd kb3
+$env:PYTHONPATH="."
+uvicorn backend.main:app --reload --port 8000
+
+Thấy:
+✓ Elasticsearch: <http://localhost:9200>
+✓ ClickHouse 24.8...: localhost:9000
+Uvicorn running on <http://0.0.0.0:8000>
+
+## Bước 3 — Chạy frontend (Terminal 2 — mở cửa sổ mới)
+
+cd kb3
+make frontend-serve
+Hoặc:
+cd kb3/frontend
+python -m http.server 8080
+
+## Bước 4 — Mở browser
+
+URL Mục đích
+<http://localhost:8080> Frontend demo (trang chính)
+<http://localhost:8000/docs> Swagger UI — test API thủ công
+<http://localhost:8000/health> Health check JSON
+
+## Bước 5 — Login thử
+
+Ở frontend, có ô đăng nhập:
+
+Admin: admin / admin123 → thấy mọi field (author, url...)
+Guest: guest / guest123 → bị ẩn author + chỉ thấy canonical
+Không login → anonymous (giống guest)
+⏹ Cách tắt
+Terminal backend: Ctrl+C
+Terminal frontend: Ctrl+C
+Stack ES/CH: cd main_process && docker-compose down (nếu muốn)
+🐛 Nếu lỗi
+Lỗi Fix
+ModuleNotFoundError: fastapi Chưa make install
+ModuleNotFoundError: backend Thiếu PYTHONPATH=. — dùng make dev thay vì uvicorn trực tiếp
+✗ ES: Connection refused Stack ES chưa up → cd main_process && docker-compose up -d
+Frontend trắng / không gọi API Check URL trong auth bar góc trên phải — phải là <http://localhost:8000>
+CORS error Backend đã allow * sẵn, khả năng do backend chưa chạy
