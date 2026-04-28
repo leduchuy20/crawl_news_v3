@@ -3,12 +3,12 @@
 """
 01_clean_entities.py
 --------------------
-Clean noise entities sau NER trước khi index vào ES/ClickHouse.
+Clean noise entities + keywords sau NER trước khi index vào ES/ClickHouse.
 
 Hỗ trợ multi-partition input (glob) + output tự rotate ở 89MB, dùng chung helper
 với pre_dataset/partition_io.py.
 
-Rules clean (thứ tự quan trọng):
+== Entities clean (thứ tự quan trọng) ==
 1. Strip leading/trailing punctuation & whitespace
 2. Reject pure-numeric / percent / currency
 3. Reject date-like: "năm 2026", "tháng 3", "ngày 15"
@@ -16,7 +16,12 @@ Rules clean (thứ tự quan trọng):
 5. Reject common generic words (Bộ, Điểm, Người...)
 6. Strip admin prefix: "xã Sơn Cẩm" → "Sơn Cẩm" để dedup với "Sơn Cẩm" khác
 7. Dedup trong cùng bài (sau normalize)
-8. (Optional) Re-classify: "xã/huyện/tỉnh X" luôn là LOC kể cả nếu NER gán PER
+8. Re-classify: "xã/huyện/tỉnh X" luôn là LOC; "ông/bà/HLV X" luôn là PER
+
+== Keywords clean ==
+RSS/JSON-LD VN thường gắn tên category vào keyword tag ("Thế giới", "Xã hội",
+"Kinh tế"...). Nếu không filter, top-keyword trending sẽ luôn là tên category
+chứ không phải sự kiện thực. Rules tương tự entities + reject KEYWORD_CATEGORY_REJECT.
 
 Usage:
     # Default: đọc ../data/articles_ner*.jsonl, ghi ../data/articles_ready.jsonl
@@ -85,6 +90,41 @@ PER_TITLE_PREFIXES = [
     "hlv ", "huấn luyện viên ",
     "ca sĩ ", "nghệ sĩ ", "diễn viên ",
 ]
+
+# Tên category mà RSS/JSON-LD hay gắn vào keyword tag → loại bỏ để
+# trending không bị "Thế giới", "Xã hội", "Kinh tế" luôn lên top.
+# So sánh sau khi .lower() và normalize whitespace.
+KEYWORD_CATEGORY_REJECT = {
+    # Vietnamese category names (proper form, có dấu)
+    "thế giới", "xã hội", "kinh tế", "thể thao", "chính trị",
+    "thời sự", "giáo dục", "công nghệ", "đời sống", "pháp luật",
+    "sức khỏe", "giải trí", "du lịch", "quân sự", "kinh doanh",
+    "văn hóa", "khoa học", "y tế", "ô tô xe máy", "bất động sản",
+    "tài chính", "chứng khoán", "thị trường", "gia đình",
+    "âm nhạc", "điện ảnh", "thời trang", "ẩm thực", "nhà đất",
+    "ô tô", "xe máy", "thị trường - tiêu dùng", "tài chính - bất động sản",
+    # English equivalents (một số site tag song ngữ)
+    "news", "world", "sports", "business", "tech", "politics",
+    "entertainment", "lifestyle", "law", "education", "health",
+    "travel", "auto", "military", "home",
+    # slug forms (đề phòng lọt qua từ URL parsing)
+    "the-gioi", "xa-hoi", "kinh-te", "the-thao", "chinh-tri",
+    "thoi-su", "giao-duc", "cong-nghe", "doi-song", "phap-luat",
+    "suc-khoe", "giai-tri", "du-lich", "quan-su", "kinh-doanh",
+    "van-hoa", "khoa-hoc", "y-te", "oto-xe-may", "bat-dong-san",
+    "tai-chinh", "chung-khoan", "thi-truong",
+    # generic news tags / nav labels
+    "tin tức", "tin mới", "tin mới nhất", "tin nóng", "tin hot",
+    "tin tức 24h", "tin tức trong ngày", "tin nhanh", "trang chủ",
+    "video", "ảnh", "hình ảnh", "infographic", "podcast", "longform",
+    "bình luận", "ý kiến", "góc nhìn", "phân tích", "xã luận",
+    "tin tức mới", "tin tức nóng", "thời sự nóng",
+    # regional sections (tag chứ không phải địa danh sự kiện cụ thể)
+    "asean", "châu á", "châu âu", "châu mỹ", "châu phi",
+    "trung đông", "châu á - thái bình dương", "châu á thái bình dương",
+    "chau-a-tbd", "chau-au", "chau-my", "chau-phi", "trung-dong",
+}
+
 
 # Regex
 _DATE_LIKE = re.compile(
@@ -213,15 +253,56 @@ def dedup_entities(entities: List[Dict[str, str]]) -> List[Dict[str, str]]:
     return out
 
 
+def clean_keyword(kw: str) -> Optional[str]:
+    """Clean 1 keyword. Trả None nếu là category name / noise."""
+    if not kw:
+        return None
+    text = normalize_text(kw)
+    if not text:
+        return None
+    if len(text) < MIN_ENTITY_LEN or len(text) > MAX_ENTITY_LEN:
+        return None
+    if is_pure_numeric(text) or is_date_like(text) or is_currency_or_percent(text):
+        return None
+    if is_common_word(text):
+        return None
+    # Reject category-name pollution (so sánh lowercase, đã chuẩn whitespace)
+    if text.lower() in KEYWORD_CATEGORY_REJECT:
+        return None
+    return text
+
+
+def dedup_keywords(keywords: List[str]) -> List[str]:
+    """Dedup keyword theo lowercase, giữ thứ tự xuất hiện đầu."""
+    seen = set()
+    out = []
+    for k in keywords:
+        kl = k.lower()
+        if kl not in seen:
+            seen.add(kl)
+            out.append(k)
+    return out
+
+
 def clean_record(record: Dict) -> Dict:
-    """Clean entities của 1 record."""
+    """Clean entities + keywords của 1 record."""
+    # Entities
     entities = record.get("entities", [])
-    cleaned = []
+    cleaned_e = []
     for e in entities:
         result = clean_entity(e)
         if result is not None:
-            cleaned.append(result)
-    record["entities"] = dedup_entities(cleaned)
+            cleaned_e.append(result)
+    record["entities"] = dedup_entities(cleaned_e)
+
+    # Keywords (filter category pollution + generic noise)
+    keywords = record.get("keywords", []) or []
+    cleaned_k = []
+    for kw in keywords:
+        result = clean_keyword(kw)
+        if result is not None:
+            cleaned_k.append(result)
+    record["keywords"] = dedup_keywords(cleaned_k)
     return record
 
 
@@ -250,6 +331,9 @@ def run(input_patterns: List[str], output_path: str, verbose: bool = False):
     type_after = Counter()
     total_ent_before = 0
     total_ent_after = 0
+    total_kw_before = 0
+    total_kw_after = 0
+    kw_rejected = Counter()
     records_written = 0
 
     # 2. Stream records từ mọi partition, clean, ghi với rotation
@@ -257,18 +341,28 @@ def run(input_patterns: List[str], output_path: str, verbose: bool = False):
     with PartitionedJsonlWriter(output_path) as writer:
         for record in iter_records(inputs):
             ents_before = record.get("entities", [])
+            kws_before  = record.get("keywords", []) or []
             total_ent_before += len(ents_before)
+            total_kw_before  += len(kws_before)
             for e in ents_before:
                 type_before[e.get("type", "")] += 1
+            # Track which keywords (category names) we throw away — for visibility
+            for k in kws_before:
+                kl = (k or "").strip().lower()
+                if kl in KEYWORD_CATEGORY_REJECT:
+                    kw_rejected[kl] += 1
 
             record = clean_record(record)
 
             ents_after = record["entities"]
+            kws_after  = record["keywords"]
             total_ent_after += len(ents_after)
+            total_kw_after  += len(kws_after)
             for e in ents_after:
                 type_after[e.get("type", "")] += 1
 
             stats["removed_entities"] += len(ents_before) - len(ents_after)
+            stats["removed_keywords"] += len(kws_before) - len(kws_after)
 
             writer.write(record)
             records_written += 1
@@ -276,21 +370,28 @@ def run(input_patterns: List[str], output_path: str, verbose: bool = False):
 
             if verbose and records_written <= 3:
                 print(f"--- Sample {records_written} ---")
-                print(f"Before: {len(ents_before)} entities")
-                print(f"After : {len(ents_after)} entities")
-                print(f"Sample after: {ents_after[:5]}")
+                print(f"Entities  : {len(ents_before)} → {len(ents_after)}")
+                print(f"Keywords  : {len(kws_before)} → {len(kws_after)}")
+                print(f"  before  : {kws_before[:6]}")
+                print(f"  after   : {kws_after[:6]}")
                 print()
 
-    reduction_pct = (1 - total_ent_after / total_ent_before) * 100 if total_ent_before else 0
+    ent_reduction = (1 - total_ent_after / total_ent_before) * 100 if total_ent_before else 0
+    kw_reduction  = (1 - total_kw_after  / total_kw_before)  * 100 if total_kw_before  else 0
     print()
     print("=" * 60)
     print("CLEAN STATS")
     print("=" * 60)
-    print(f"Records processed    : {records_written:,}")
-    print(f"Entities before clean: {total_ent_before:,}")
-    print(f"Entities after clean : {total_ent_after:,}")
-    print(f"Removed              : {stats['removed_entities']:,} ({reduction_pct:.1f}% noise)")
-    print(f"Avg entities/article : {total_ent_after / max(records_written,1):.1f}")
+    print(f"Records processed     : {records_written:,}")
+    print(f"Entities before clean : {total_ent_before:,}")
+    print(f"Entities after clean  : {total_ent_after:,}")
+    print(f"Entities removed      : {stats['removed_entities']:,} ({ent_reduction:.1f}% noise)")
+    print(f"Avg entities/article  : {total_ent_after / max(records_written,1):.1f}")
+    print()
+    print(f"Keywords before clean : {total_kw_before:,}")
+    print(f"Keywords after clean  : {total_kw_after:,}")
+    print(f"Keywords removed      : {stats['removed_keywords']:,} ({kw_reduction:.1f}% category-pollution + noise)")
+    print(f"Avg keywords/article  : {total_kw_after / max(records_written,1):.1f}")
     print()
     print("By type BEFORE:")
     for t, c in type_before.most_common():
@@ -301,6 +402,11 @@ def run(input_patterns: List[str], output_path: str, verbose: bool = False):
         delta = c - type_before.get(t, 0)
         print(f"  {t:<8} {c:>8,}  ({delta:+,})")
     print()
+    if kw_rejected:
+        print("Top category-name keywords removed:")
+        for kw, c in kw_rejected.most_common(10):
+            print(f"  {kw:<24} {c:>8,}")
+        print()
     print("Output partitions:")
     for p in all_partition_paths(output_path):
         size_mb = os.path.getsize(p) / 1024 / 1024
