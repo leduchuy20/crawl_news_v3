@@ -101,10 +101,33 @@ SITE_CONFIG: Dict[str, Dict[str, Any]] = {
         "pagination_template": "{base}?page={page}",
         "article_url_regex": re.compile(r"-\d+\.ldo$"),
     },
+    # dantri: category .htm, pagination /trang-N.htm, article URL kết thúc bằng -<14+ digits>.htm
+    # (dantri RSS hay bị HTTP 428 do anti-bot — dùng HTML crawler thay thế).
+    "dantri.com.vn": {
+        "category_pages": [
+            "https://dantri.com.vn/tin-moi-nhat.htm",
+            "https://dantri.com.vn/the-gioi.htm",
+            "https://dantri.com.vn/thoi-su.htm",
+            "https://dantri.com.vn/phap-luat.htm",
+            "https://dantri.com.vn/suc-khoe.htm",
+            "https://dantri.com.vn/doi-song.htm",
+            "https://dantri.com.vn/du-lich.htm",
+            "https://dantri.com.vn/kinh-doanh.htm",
+            "https://dantri.com.vn/bat-dong-san.htm",
+            "https://dantri.com.vn/the-thao.htm",
+            "https://dantri.com.vn/giai-tri.htm",
+            "https://dantri.com.vn/giao-duc.htm",
+            "https://dantri.com.vn/o-to-xe-may.htm",
+            "https://dantri.com.vn/noi-vu.htm",
+            "https://dantri.com.vn/cong-nghe.htm",
+        ],
+        "pagination_template": "{base}/trang-{page}.htm",
+        "article_url_regex": re.compile(r"-\d{10,}\.htm$"),
+    },
 }
 
 # Sites được bật mặc định (24h dùng RSS, không qua HTML crawler)
-DEFAULT_SITES = ["znews.vn", "laodong.vn"]
+DEFAULT_SITES = ["znews.vn", "laodong.vn", "dantri.com.vn"]
 
 
 # =========================================================================
@@ -115,9 +138,11 @@ def _make_pagination_url(category_url: str, page: int, template: str) -> str:
     """Dựng URL của trang N từ category URL gốc."""
     if page == 1:
         return category_url
-    # URL category kết thúc bằng .html (znews, 24h): bỏ .html để lấy base
+    # Strip extension nếu có (.html: znews/24h, .htm: dantri); else strip trailing /
     if category_url.endswith(".html"):
         base = category_url[:-len(".html")]
+    elif category_url.endswith(".htm"):
+        base = category_url[:-len(".htm")]
     else:
         # laodong: https://laodong.vn/thoi-su/ → base = https://laodong.vn/thoi-su
         base = category_url.rstrip("/")

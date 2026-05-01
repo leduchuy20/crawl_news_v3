@@ -1,10 +1,10 @@
 # Pipeline — Hướng dẫn chạy & tắt
 
-Tài liệu 1 trang: chạy toàn bộ hệ thống từ **crawl tin tức** → **index + phân tích** → **API + giao diện demo**, và tắt gọn khi xong.
+Tài liệu 1 trang: chạy toàn bộ hệ thống từ **crawl tin tức** → **index + phân tích** → **API + giao diện demo** → **benchmark báo cáo**, và tắt gọn khi xong.
 
 ---
 
-## Tổng quan — 3 stage
+## Tổng quan — 4 stage (Stage 4 optional)
 
 ```
 ┌──────────────────────────────────────────────────────────────────────┐
@@ -40,9 +40,27 @@ Tài liệu 1 trang: chạy toàn bộ hệ thống từ **crawl tin tức** →
 │     │   └─ deps/             → ES + ClickHouse clients               │
 │     └─ frontend/index.html   → SPA http://localhost:8080             │
 └──────────────────────────────────────────────────────────────────────┘
+                                 │
+                                 ▼
+┌──────────────────────────────────────────────────────────────────────┐
+│ STAGE 4 — BENCHMARK (optional)  (benchmark/, ES + CH + PG)           │
+│                                                                      │
+│   benchmark/                                                         │
+│     ├─ docker-compose.yml    → Postgres-only stack (news-pg)         │
+│     ├─ config/pg_schema.sql  → Postgres schema + GIN/tsvector idx    │
+│     ├─ scripts/                                                      │
+│     │   ├─ 01_load_pg.py     → JSONL → Postgres                      │
+│     │   ├─ 02_run_benchmark.py → so sánh ES vs CH vs PG (3 category) │
+│     │   └─ 03_plot_results.py  → CSV → PNG charts                    │
+│     └─ results/              → output: .json/.csv/.md + chart_*.png  │
+└──────────────────────────────────────────────────────────────────────┘
 ```
 
-**Phụ thuộc**: Stage 2 cần Stage 1 đã có `articles_ner*.jsonl`. Stage 3 cần Stage 2 đã có ES index + ClickHouse table.
+**Phụ thuộc**:
+
+- Stage 2 cần Stage 1 đã có `articles_ner*.jsonl`.
+- Stage 3 cần Stage 2 đã có ES index + ClickHouse table.
+- Stage 4 cần Stage 2 (so sánh ES + CH với Postgres) + file `articles_ready*.jsonl` (output Stage 2 step 1, giống dataset đã vào ES/CH để fair comparison).
 
 ---
 
@@ -186,6 +204,81 @@ Không login → anonymous (quyền như `guest`). Trên UI: click avatar góc p
 - **KB1 — Search (ES)**: full-text, entity search (PER/LOC/ORG), filter category, highlight, modal chi tiết bài với entities + keywords
 - **KB2 — Trends (ClickHouse)**: top keywords, hot spike (×multiplier), timeline, phân bố giờ, top LOC/PER entities, cross-source coverage
 - **KB3 — RBAC**: so sánh stats `news_articles` vs alias `news_public`, so sánh cùng 1 article giữa admin vs guest (side-by-side diff)
+
+---
+
+## Stage 4 — Benchmark (optional, cho báo cáo)
+
+So sánh hiệu năng **Elasticsearch vs ClickHouse vs PostgreSQL** trên cùng dataset, cùng query. Output là bảng + chart PNG dán thẳng vào báo cáo.
+
+**Yêu cầu**: Stage 2 Docker đang up (benchmark cần ES + CH có data) + đã chạy `main_process/01_clean_entities.py` để có `data/articles_ready*.jsonl` (cùng dataset đã vào ES/CH → fair comparison).
+
+### Bước 0 — Cài deps (1 lần)
+
+```powershell
+cd d:\work\crawl_news_v2\benchmark
+pip install psycopg2-binary elasticsearch clickhouse-driver matplotlib
+```
+
+### Bước 1 — Khởi động Postgres container
+
+```powershell
+docker-compose up -d
+docker ps                       # phải thấy thêm news-pg
+docker logs news-pg --tail 5    # đợi "ready to accept connections"
+```
+
+### Bước 2 — Load JSONL vào Postgres (~5–10 phút, phần lớn là tạo GIN index)
+
+Multi-partition glob — script tự đọc tất cả `articles_ready*.jsonl`:
+
+```powershell
+python scripts\01_load_pg.py --reset
+# Hoặc explicit:
+python scripts\01_load_pg.py --input "..\data\articles_ready*.jsonl" --schema config\pg_schema.sql --reset
+```
+
+### Bước 3 — Chạy benchmark (~15–30 phút)
+
+```powershell
+python scripts\02_run_benchmark.py --runs 20 --warmup 3
+# Hoặc nhanh hơn 2× cho test:
+python scripts\02_run_benchmark.py --runs 10 --warmup 2
+```
+
+3 nhóm test sẽ chạy:
+
+- **Full-text search**: ES `multi_match` vs PG-tsvector vs PG-trigram vs PG-seqscan
+- **Aggregation / trending**: CH-MV vs CH-raw vs PG `GROUP BY`
+- **Entity nested search**: ES nested vs PG JSONB containment
+
+Output ở `benchmark\results\`:
+
+- `benchmark_<ts>.json` — raw numbers
+- `benchmark_<ts>.csv` — cho Excel/pandas
+- `benchmark_<ts>.md` — bảng ready-to-paste vào báo cáo
+
+### Bước 4 — Vẽ chart PNG
+
+```powershell
+$latest = (Get-ChildItem results\benchmark_*.csv | Sort-Object LastWriteTime -Descending | Select-Object -First 1).Name
+python scripts\03_plot_results.py --csv results\$latest
+```
+
+Output 4 file PNG ở `benchmark\results\`:
+
+- `chart_fulltext.png` — bar log-scale 4 engines
+- `chart_aggregation.png` — CH-MV vs CH-raw vs PG
+- `chart_entity.png` — ES nested vs PG JSONB
+- `chart_speedup.png` — speedup ES/CH so với PG baseline
+
+### Tắt Postgres khi xong
+
+```powershell
+cd d:\work\crawl_news_v2\benchmark
+docker-compose down              # giữ data → lần sau chạy lại không cần load
+docker-compose down -v           # xoá luôn volume → lần sau phải load lại từ đầu
+```
 
 ---
 
@@ -339,6 +432,9 @@ docker restart news-es
 | Port 8000/8080/9200/5601/9000 bị chiếm | `docker-compose down` stack cũ, hoặc đổi port trong compose |
 | Frontend gọi API bị CORS / network error | Mở Settings drawer (avatar góc phải) → sửa **API URL** cho đúng backend |
 | 403 khi vào RBAC stats | Chưa login admin → Settings → Sign in bằng `admin/admin123` |
+| Stage 4 `Connection refused localhost:5432` | `news-pg` chưa lên — `cd benchmark && docker-compose up -d` |
+| Stage 4 `relation "articles" does not exist` | Chưa load data — chạy `python scripts\01_load_pg.py --reset` |
+| Stage 4 `network main_process_news-net not found` | Stage 2 chưa up — `cd main_process && docker-compose up -d` |
 
 ---
 
@@ -364,7 +460,15 @@ cd kb3/frontend && python -m http.server 8080
 
 # 4. Mở trình duyệt: http://localhost:8080
 
-# 5. Xong — tắt
-#   Ctrl+C ở 2 terminal
-cd main_process && docker-compose down
+# 5. (optional) Stage 4 — Benchmark cho báo cáo
+cd ../benchmark
+docker-compose up -d
+python scripts/01_load_pg.py --reset    # tự đọc ../data/articles_ready*.jsonl
+python scripts/02_run_benchmark.py --runs 20 --warmup 3
+python scripts/03_plot_results.py --csv "$(ls -t results/benchmark_*.csv | head -1)"
+
+# 6. Xong — tắt
+#   Ctrl+C ở 2 terminal kb3
+cd ../main_process && docker-compose down
+cd ../benchmark    && docker-compose down    # nếu đã chạy Stage 4
 ```

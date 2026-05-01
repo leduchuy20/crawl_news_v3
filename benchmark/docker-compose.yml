@@ -1,0 +1,49 @@
+version: "3.9"
+
+# PostgreSQL chỉ phục vụ benchmark — so với ES + ClickHouse.
+# Reuse network 'main_process_news-net' đã có sẵn (tạo bởi main_process/docker-compose.yml).
+
+services:
+  postgres:
+    image: postgres:16
+    container_name: news-pg
+    environment:
+      POSTGRES_DB: news_bench
+      POSTGRES_USER: bench
+      POSTGRES_PASSWORD: bench
+      # Tuning cho benchmark (thay vì default 128MB shared_buffers)
+      POSTGRES_INITDB_ARGS: "--data-checksums"
+    command:
+      - "postgres"
+      - "-c"
+      - "shared_buffers=512MB"
+      - "-c"
+      - "work_mem=64MB"
+      - "-c"
+      - "maintenance_work_mem=256MB"
+      - "-c"
+      - "effective_cache_size=1GB"
+      - "-c"
+      - "random_page_cost=1.1"  # Giả định SSD
+      - "-c"
+      - "max_parallel_workers_per_gather=4"
+    ports:
+      - "5432:5432"
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U bench -d news_bench"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks:
+      - news-net
+
+volumes:
+  pg_data:
+
+networks:
+  news-net:
+    external: true
+    # Reuse network đã tạo bởi main_process/docker-compose.yml
+    name: main_process_news-net

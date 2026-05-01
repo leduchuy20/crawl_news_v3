@@ -153,7 +153,10 @@ def extract_meta_fallback(soup: BeautifulSoup) -> Dict[str, Any]:
 
 SITE_BODY_SELECTORS: Dict[str, List[str]] = {
     "vnexpress.net":   [".fck_detail", "article.fck_detail"],
-    "dantri.com.vn":   [".singular-content", ".dt-news__content", ".detail-content"],
+    # Dantri (2026): chuyển sang Tailwind, layout mới dùng <article class="dt-flex ..."> hoặc
+    # div.e-magazine__body cho e-magazine. Giữ selector cũ ở cuối làm fallback cho bài cũ.
+    "dantri.com.vn":   ["div.e-magazine__body", "article.dt-flex", "article",
+                        ".singular-content", ".dt-news__content", ".detail-content"],
     "tuoitre.vn":      [".detail-content", ".content-detail", "article.detail"],
     "thanhnien.vn":    [".detail-cmain", ".detail__content"],
     "vietnamnet.vn":   [".maincontent", ".content-detail"],

@@ -68,17 +68,8 @@ RSS_FEEDS = [
     "https://vnexpress.net/rss/so-hoa.rss",
     "https://vnexpress.net/rss/oto-xe-may.rss",
     "https://vnexpress.net/rss/y-kien.rss",
-    # Dân Trí
-    "https://dantri.com.vn/rss/home.rss",
-    "https://dantri.com.vn/rss/xa-hoi.rss",
-    "https://dantri.com.vn/rss/the-gioi.rss",
-    "https://dantri.com.vn/rss/kinh-doanh.rss",
-    "https://dantri.com.vn/rss/the-thao.rss",
-    "https://dantri.com.vn/rss/giai-tri.rss",
-    "https://dantri.com.vn/rss/giao-duc.rss",
-    "https://dantri.com.vn/rss/suc-khoe.rss",
-    "https://dantri.com.vn/rss/du-lich.rss",
-    "https://dantri.com.vn/rss/o-to-xe-may.rss",
+    # Dân Trí — RSS hay bị HTTP 428 (anti-bot/Precondition Required).
+    # Đã chuyển sang HTML crawler ở html_crawler.py SITE_CONFIG["dantri.com.vn"].
     # Tuổi Trẻ
     "https://tuoitre.vn/rss/tin-moi-nhat.rss",
     "https://tuoitre.vn/rss/thoi-su.rss",
