@@ -188,12 +188,21 @@ def process_article_url(
     http: HttpClient,
     store: JsonlStore,
     start_date: Optional[str] = None,
+    referer: Optional[str] = None,
 ) -> Tuple[bool, str, str]:
-    """Fetch + extract + store 1 article. Trả (added, reason, pub_local_date)."""
+    """Fetch + extract + store 1 article. Trả (added, reason, pub_local_date).
+
+    `referer` (URL trang category mà article URL được lấy từ đó) được set vào
+    header Referer + Sec-Fetch-Site=same-origin để giả lập click navigation —
+    giúp né WAF dantri/Cloudflare trên IP datacenter (GitHub Actions).
+    """
     if store.has_url(url):
         return False, "dup", ""
 
-    html = http.get_text(url)
+    extra = None
+    if referer:
+        extra = {"Referer": referer, "Sec-Fetch-Site": "same-origin"}
+    html = http.get_text(url, extra_headers=extra)
     if not html:
         return False, "fetch_failed", ""
 
@@ -289,7 +298,9 @@ def crawl_category(
         page_has_fresh_article = False
 
         for url in new_urls:
-            added, reason, pub_local = process_article_url(url, http, store, start_date=start_date)
+            added, reason, pub_local = process_article_url(
+                url, http, store, start_date=start_date, referer=page_url
+            )
             if reason == "added":
                 stats["added"] += 1
             elif reason == "too_old":
@@ -357,6 +368,15 @@ def run_html_crawler(
             continue
         config = SITE_CONFIG[site_domain]
         logger.info(f">>> SITE: {site_domain}")
+        # Warm-up homepage để lấy session cookie WAF (Cloudflare clearance, __cfduid...).
+        # Quan trọng đặc biệt cho dantri trên GitHub Actions (datacenter IP) — không có
+        # cookie ban đầu thì nhiều request đầu tiên trả 428.
+        try:
+            home = f"https://{site_domain}/"
+            http.get_text(home)
+            logger.debug(f"  warm-up GET {home}")
+        except Exception as e:
+            logger.debug(f"  warm-up failed (non-fatal): {e}")
         for cat_url in config["category_pages"]:
             ckpt_key = f"cat:{bucket}:{cat_url}"
             if checkpoint.is_done(ckpt_key):

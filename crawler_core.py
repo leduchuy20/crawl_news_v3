@@ -277,14 +277,28 @@ class PerDomainRateLimiter:
 class HttpClient:
     """HTTP session dùng chung, có retry + per-domain rate limiting."""
 
+    # Headers gần với Chrome thật. Sec-Fetch-* + Upgrade-Insecure-Requests + DNT
+    # giúp né WAF (dantri trả 428 nếu thiếu chúng, nhất là khi crawl từ datacenter IP
+    # như GitHub Actions). Accept-Encoding cho phép requests tự decode gzip/br.
     DEFAULT_HEADERS = {
         "User-Agent": (
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
             "AppleWebKit/537.36 (KHTML, like Gecko) "
             "Chrome/120.0.0.0 Safari/537.36"
         ),
-        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-        "Accept-Language": "vi,en;q=0.9",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+        "Accept-Language": "vi-VN,vi;q=0.9,en-US;q=0.8,en;q=0.7",
+        "Accept-Encoding": "gzip, deflate, br",
+        "Cache-Control": "max-age=0",
+        "Upgrade-Insecure-Requests": "1",
+        "DNT": "1",
+        "Sec-Ch-Ua": '"Chromium";v="120", "Not(A:Brand";v="24", "Google Chrome";v="120"',
+        "Sec-Ch-Ua-Mobile": "?0",
+        "Sec-Ch-Ua-Platform": '"Windows"',
+        "Sec-Fetch-Dest": "document",
+        "Sec-Fetch-Mode": "navigate",
+        "Sec-Fetch-Site": "none",
+        "Sec-Fetch-User": "?1",
     }
 
     def __init__(
@@ -307,8 +321,10 @@ class HttpClient:
             total=5,
             connect=5,
             read=5,
-            backoff_factor=0.6,
-            status_forcelist=[429, 500, 502, 503, 504],
+            backoff_factor=0.8,
+            # 428 = Cloudflare anti-bot challenge ở dantri. 403 đôi khi cũng do WAF
+            # nháy, retry sau backoff thường pass.
+            status_forcelist=[403, 428, 429, 500, 502, 503, 504],
             allowed_methods=["GET", "HEAD"],
             respect_retry_after_header=True,
             raise_on_status=False,
@@ -347,8 +363,11 @@ class HttpClient:
             return None
         return r
 
-    def get_text(self, url: str) -> Optional[str]:
-        r = self.get(url)
+    def get_text(self, url: str, extra_headers: Optional[Dict[str, str]] = None) -> Optional[str]:
+        kwargs = {}
+        if extra_headers:
+            kwargs["headers"] = extra_headers
+        r = self.get(url, **kwargs)
         return r.text if r is not None else None
 
 

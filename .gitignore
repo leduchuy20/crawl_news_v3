@@ -5,9 +5,9 @@ crawl_venv/
 venv/
 .venv/
 
-# Log files — không commit
-data/*.log
-*.log
+# # Log files — không commit
+# data/*.log
+# *.log
 
 # Editor / OS
 .vscode/
