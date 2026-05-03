@@ -288,7 +288,10 @@ class HttpClient:
         ),
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
         "Accept-Language": "vi-VN,vi;q=0.9,en-US;q=0.8,en;q=0.7",
-        "Accept-Encoding": "gzip, deflate, br",
+        # CHỈ "gzip, deflate" — KHÔNG kèm "br" (brotli). requests library không decode
+        # brotli nếu thiếu package `brotli`/`brotlicffi`, sẽ trả raw bytes → XML/HTML
+        # parser fail "not well-formed". Site như vietnamnet/tuoitre nén br khi thấy header.
+        "Accept-Encoding": "gzip, deflate",
         "Cache-Control": "max-age=0",
         "Upgrade-Insecure-Requests": "1",
         "DNT": "1",
