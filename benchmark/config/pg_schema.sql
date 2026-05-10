@@ -60,11 +60,17 @@ CREATE TABLE articles (
 -- --------------------------------------------------------------------------
 -- Full-text search: tsvector column tự generate
 -- Weight: title (A) > content (B) — giống ES "title^3"
+--
+-- LƯU Ý: KHÔNG dùng unaccent() để giữ dấu tiếng Việt. Lý do:
+-- - ES standard analyzer tone-sensitive (giữ dấu).
+-- - Nếu PG dùng unaccent thì "giá" (price) và "giả" (fake) đều thành "gia"
+--   → match nhiều doc không liên quan → result_count gấp 2× ES → benchmark lệch.
+-- Để fair với ES, ta cũng giữ dấu phía PG.
 -- --------------------------------------------------------------------------
 ALTER TABLE articles ADD COLUMN fts tsvector
     GENERATED ALWAYS AS (
-        setweight(to_tsvector('simple', coalesce(immutable_unaccent(title), '')), 'A') ||
-        setweight(to_tsvector('simple', coalesce(immutable_unaccent(content), '')), 'B')
+        setweight(to_tsvector('simple', coalesce(title, '')), 'A') ||
+        setweight(to_tsvector('simple', coalesce(content, '')), 'B')
     ) STORED;
 
 -- --------------------------------------------------------------------------

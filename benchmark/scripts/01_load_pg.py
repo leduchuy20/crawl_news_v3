@@ -106,7 +106,9 @@ ARTICLE_PLACEHOLDERS = ",".join(["%s"] * 24)
 # Main
 # ==================================================================
 def run_schema(cur, schema_path: str):
-    with open(schema_path) as f:
+    # encoding='utf-8' bắt buộc trên Windows (default cp1252 sẽ fail
+    # với comment tiếng Việt trong .sql)
+    with open(schema_path, encoding="utf-8") as f:
         sql = f.read()
     cur.execute(sql)
     print("✓ Schema created")

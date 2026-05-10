@@ -48,6 +48,24 @@ from dataclasses import dataclass, asdict, field
 from datetime import datetime
 from typing import Any, Callable, Dict, List, Optional
 
+
+def _percentile(data: List[float], p: float) -> float:
+    """Linear-interpolation percentile, robust với mọi N >= 1.
+    p in [0, 100]. Tránh bug `len(m) >= 20 else max(m)` của bản cũ
+    (warmup=3, runs=20 → len(m)=17 → luôn rơi vào max → P95 == Max).
+    """
+    if not data:
+        return 0.0
+    if len(data) == 1:
+        return float(data[0])
+    s = sorted(data)
+    k = (len(s) - 1) * (p / 100.0)
+    f = int(k)
+    c = min(f + 1, len(s) - 1)
+    if f == c:
+        return float(s[f])
+    return float(s[f] + (s[c] - s[f]) * (k - f))
+
 try:
     from elasticsearch import Elasticsearch
     from clickhouse_driver import Client as CHClient
@@ -96,7 +114,7 @@ class BenchmarkResult:
             "min_ms": round(min(m), 2),
             "median_ms": round(statistics.median(m), 2),
             "mean_ms": round(statistics.mean(m), 2),
-            "p95_ms": round(sorted(m)[int(0.95 * len(m)) - 1] if len(m) >= 20 else max(m), 2),
+            "p95_ms": round(_percentile(m, 95), 2),
             "max_ms": round(max(m), 2),
             "stdev_ms": round(statistics.stdev(m), 2) if len(m) > 1 else 0.0,
             "qps": round(1000.0 / statistics.mean(m), 1) if statistics.mean(m) > 0 else 0,
@@ -131,7 +149,14 @@ def time_query(fn: Callable, runs: int, warmup: int) -> BenchmarkResult:
 # Query callables — mỗi engine có cách đếm result riêng
 # ==================================================================
 def mk_es_fulltext(es: Elasticsearch, index: str, q: str):
-    """ES full-text. AND semantics để khớp PG plainto_tsquery (tránh apples-vs-oranges)."""
+    """ES full-text — fair với PG fts (gộp title+content vào 1 tsvector).
+
+    - cross_fields: term có thể nằm ở title HOẶC content miễn là tất cả
+      term đều xuất hiện trong combined-virtual-field (giống PG `to_tsvector(title) || to_tsvector(content)`).
+    - operator=and: tất cả term phải match (giống PG `plainto_tsquery` mặc định AND).
+    - Bản cũ dùng `best_fields` → yêu cầu tất cả term ở CÙNG 1 field →
+      "giá" ở title + "vàng" ở content KHÔNG match → ES trả về ít hơn PG → benchmark lệch.
+    """
     def run():
         res = es.search(
             index=index,
@@ -140,9 +165,7 @@ def mk_es_fulltext(es: Elasticsearch, index: str, q: str):
                     "multi_match": {
                         "query": q,
                         "fields": ["title^3", "content"],
-                        "type": "best_fields",
-                        # Align với PG plainto_tsquery (default AND).
-                        # Không có operator này, ES dùng OR mặc định → count gấp 3-6× PG → benchmark vô nghĩa.
+                        "type": "cross_fields",
                         "operator": "and",
                     }
                 },
@@ -155,12 +178,16 @@ def mk_es_fulltext(es: Elasticsearch, index: str, q: str):
 
 
 def mk_pg_fts(conn, q: str):
+    """PG full-text — KHÔNG unaccent để giữ dấu (fair với ES tone-sensitive).
+
+    fts column build từ to_tsvector('simple', title || content) không qua unaccent
+    (xem pg_schema.sql). Query cũng KHÔNG unaccent → match exact tones.
+    """
     def run():
         cur = conn.cursor()
-        # Normalize: remove Vietnamese tones để match unaccent
         cur.execute("""
             SELECT count(*) FROM articles
-            WHERE fts @@ plainto_tsquery('simple', unaccent(%s))
+            WHERE fts @@ plainto_tsquery('simple', %s)
         """, (q,))
         c = cur.fetchone()[0]
         cur.close()
@@ -308,6 +335,38 @@ def mk_ch_hot_spike(ch: CHClient, window: int):
     return run
 
 
+def mk_ch_hot_spike_raw(ch: CHClient, window: int):
+    """Hot spike trên raw `keyword_events` (KHÔNG dùng MV) — fair với Postgres.
+
+    Cùng query plan với Postgres (count() trên keyword_events) → so trực tiếp
+    "ClickHouse columnar vs Postgres row-store" trên cùng workload.
+    """
+    sql = """
+        WITH
+            cur AS (
+                SELECT keyword, count() AS cnt_now
+                FROM news.keyword_events
+                WHERE publish_date >= today() - %(w)s
+                GROUP BY keyword
+            ),
+            prev AS (
+                SELECT keyword, count() AS cnt_prev
+                FROM news.keyword_events
+                WHERE publish_date >= today() - %(w2)s AND publish_date < today() - %(w)s
+                GROUP BY keyword
+            )
+        SELECT c.keyword, c.cnt_now, coalesce(p.cnt_prev, 0),
+               round(c.cnt_now / greatest(p.cnt_prev, 1), 2) AS mult
+        FROM cur c LEFT JOIN prev p ON c.keyword = p.keyword
+        WHERE c.cnt_now >= 5
+        ORDER BY mult DESC, c.cnt_now DESC LIMIT 20
+    """
+    def run():
+        rows = ch.execute(sql, {"w": window, "w2": window * 2})
+        return len(rows)
+    return run
+
+
 def mk_pg_hot_spike(conn, window: int):
     def run():
         cur = conn.cursor()
@@ -407,7 +466,9 @@ def build_benchmark_plan(es, ch, pg, es_index="news_articles") -> List[Dict[str,
     # Complex aggregation: hot spike
     plan.extend([
         {"category": "aggregation", "scenario": "Hot spike detection 7d", "engine": "ClickHouse-MV",
-         "query_name": "2 CTE + JOIN", "fn": mk_ch_hot_spike(ch, 7)},
+         "query_name": "2 CTE + JOIN (MV)", "fn": mk_ch_hot_spike(ch, 7)},
+        {"category": "aggregation", "scenario": "Hot spike detection 7d", "engine": "ClickHouse-raw",
+         "query_name": "2 CTE + JOIN (raw events)", "fn": mk_ch_hot_spike_raw(ch, 7)},
         {"category": "aggregation", "scenario": "Hot spike detection 7d", "engine": "Postgres",
          "query_name": "2 CTE + JOIN", "fn": mk_pg_hot_spike(pg, 7)},
     ])
@@ -527,6 +588,20 @@ def write_markdown_report(path: str, summaries: List[Dict[str, Any]]):
                 )
             for r in rows_err:
                 lines.append(f"| {r['engine']} | {r['query']} | ERROR: {r['error'][:60]} | - | - | - | - | - |")
+
+            # Sanity check: cảnh báo apple-to-orange khi count chênh > 5%
+            # (bỏ qua aggregation vì query có LIMIT 20 → count luôn = 20)
+            counts = [r["result_count"] for r in rows_sorted if r.get("result_count", 0) > 0]
+            if cat != "aggregation" and len(counts) >= 2:
+                cmin, cmax = min(counts), max(counts)
+                if cmin > 0 and (cmax - cmin) / cmin > 0.05:
+                    pct = (cmax - cmin) / cmin * 100
+                    lines.append(
+                        f"\n> ⚠️ **Count mismatch {pct:.0f}%** "
+                        f"(min={cmin:,}, max={cmax:,}). "
+                        f"Engines đang trả về số doc khác nhau → so sánh latency có thể không công bằng. "
+                        f"Check semantic của query (analyzer / tone / operator)."
+                    )
 
     # Overall verdict
     lines.append("\n## Summary")

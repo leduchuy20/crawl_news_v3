@@ -51,6 +51,9 @@ def load_csv(path: str):
 def plot_category(rows: List[Dict], category: str, out_path: str, log_scale: bool = True):
     """
     Horizontal grouped bar chart: scenario (y-axis) × engine (color groups).
+    Engine x scenario thiếu data → vẽ thanh xám hatched + label "N/A" để
+    chart cân đối và lý do thiếu cột được explicit (vd. CH-MV cross-source:
+    MV không có cột source → không thể query).
     """
     cat_rows = [r for r in rows if r["category"] == category and r.get("median_ms")]
     if not cat_rows:
@@ -73,11 +76,22 @@ def plot_category(rows: List[Dict], category: str, out_path: str, log_scale: boo
             if e not in engines:
                 engines.append(e)
 
+    # Placeholder cho missing combos (key by (scenario, engine))
+    # Hiện thời chỉ cross-source × CH-MV là missing-by-design.
+    NA_REASONS = {
+        ("Cross-source 30d (>=3 sources)", "ClickHouse-MV"):
+            "MV: no `source` col",
+    }
+
     # Plot
     n_scen = len(scenarios)
     n_eng = len(engines)
     bar_height = 0.8 / n_eng
     fig, ax = plt.subplots(figsize=(11, max(4, n_scen * 1.1)))
+
+    # Tính min/max để biết đặt placeholder bar dài bao nhiêu (cho log scale)
+    all_vals = [v for s in scenarios for v in data[s].values() if v > 0]
+    placeholder_len = (min(all_vals) * 0.5) if all_vals else 1.0
 
     y_positions = list(range(n_scen))
     for i, engine in enumerate(engines):
@@ -85,11 +99,20 @@ def plot_category(rows: List[Dict], category: str, out_path: str, log_scale: boo
         offsets = [y + (i - n_eng / 2) * bar_height + bar_height / 2 for y in y_positions]
         color = ENGINE_COLORS.get(engine, "#888")
         bars = ax.barh(offsets, values, height=bar_height, label=engine, color=color)
-        # Label on bar
+        # Label on bar (real data)
         for b, v in zip(bars, values):
             if v > 0:
                 ax.text(v * 1.05, b.get_y() + b.get_height() / 2,
                         f"{v:.1f}ms", va="center", fontsize=9, color="#333")
+        # N/A placeholder cho scenario nào engine này không có data
+        for s, off, v in zip(scenarios, offsets, values):
+            if v > 0:
+                continue
+            ax.barh([off], [placeholder_len], height=bar_height,
+                    color="#f0f0f0", edgecolor="#bbb", hatch="///", linewidth=0.5)
+            reason = NA_REASONS.get((s, engine), "N/A")
+            ax.text(placeholder_len * 1.1, off,
+                    reason, va="center", fontsize=8, color="#888", style="italic")
 
     ax.set_yticks(y_positions)
     ax.set_yticklabels(scenarios)
