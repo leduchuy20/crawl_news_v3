@@ -27,8 +27,6 @@ install:
 .PHONY: up
 up:
 	docker-compose up -d
-	@echo "Waiting for Postgres..."
-	@sleep 5
 
 .PHONY: down
 down:

@@ -47,9 +47,6 @@ install:
 .PHONY: up
 up:
 	docker-compose up -d
-	@echo "Waiting for services healthy..."
-	@sleep 5
-	@docker-compose ps
 
 .PHONY: down
 down:
@@ -76,7 +73,6 @@ install-icu:
 	docker exec news-es bin/elasticsearch-plugin install --batch analysis-icu || true
 	docker restart news-es
 	@echo "Waiting for ES to restart..."
-	@sleep 15
 
 
 .PHONY: clean-entities
