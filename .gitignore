@@ -19,3 +19,5 @@ Thumbs.db
 .claude/
 
 data/articles_ready*.jsonl
+
+readme.md
