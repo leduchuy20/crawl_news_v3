@@ -171,10 +171,3 @@ print(stats)
 | RSS + enrich full content | 2-4 giờ |
 | HTML (znews + laodong) | 1-2 giờ |
 | **Full daily run** (7 ngày back) | **20-40 phút** (đa số bài đã dedup) |
-
-## 🔜 Bước tiếp theo (ngoài phạm vi crawler)
-
-1. **NER**: chạy `underthesea.ner()` lên field `content` → populate `entities`
-2. **Dedup cross-source**: MinHash/SimHash để gộp bài cùng sự kiện từ nhiều báo
-3. **Index vào Elasticsearch + ClickHouse**: bulk import JSONL
-4. **Generate synthetic data** cho benchmark (blow up lên 1M-10M events)

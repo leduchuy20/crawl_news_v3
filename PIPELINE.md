@@ -1,4 +1,4 @@
-# Pipeline — Hướng dẫn chạy & tắt
+# Pipeline — Hướng dẫn chạy
 
 Tài liệu 1 trang: chạy toàn bộ hệ thống từ **crawl tin tức** → **index + phân tích** → **API + giao diện demo** → **benchmark báo cáo**, và tắt gọn khi xong.
 
@@ -66,7 +66,7 @@ Tài liệu 1 trang: chạy toàn bộ hệ thống từ **crawl tin tức** →
 
 ## Stage 1 — Crawl + NER
 
-Chạy ở root `d:\work\crawl_news_v2`.
+Chạy ở root `crawl_news_v2`.
 
 **Lần đầu** — cài Python deps:
 ```bash
@@ -216,7 +216,7 @@ So sánh hiệu năng **Elasticsearch vs ClickHouse vs PostgreSQL** trên cùng 
 ### Bước 0 — Cài deps (1 lần)
 
 ```powershell
-cd d:\work\crawl_news_v2\benchmark
+cd benchmark
 pip install psycopg2-binary elasticsearch clickhouse-driver matplotlib
 ```
 
@@ -225,7 +225,6 @@ pip install psycopg2-binary elasticsearch clickhouse-driver matplotlib
 ```powershell
 docker-compose up -d
 docker ps                       # phải thấy thêm news-pg
-docker logs news-pg --tail 5    # đợi "ready to accept connections"
 ```
 
 ### Bước 2 — Load JSONL vào Postgres (~5–10 phút, phần lớn là tạo GIN index)
@@ -275,7 +274,7 @@ Output 4 file PNG ở `benchmark\results\`:
 ### Tắt Postgres khi xong
 
 ```powershell
-cd d:\work\crawl_news_v2\benchmark
+cd benchmark
 docker-compose down              # giữ data → lần sau chạy lại không cần load
 docker-compose down -v           # xoá luôn volume → lần sau phải load lại từ đầu
 ```
