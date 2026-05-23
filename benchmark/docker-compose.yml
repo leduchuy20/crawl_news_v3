@@ -1,6 +1,6 @@
 version: "3.9"
 
-# PostgreSQL chỉ phục vụ benchmark — so với ES + ClickHouse.
+# PostgreSQL + MongoDB cho benchmark — so storage + latency với ES + ClickHouse.
 # Reuse network 'main_process_news-net' đã có sẵn (tạo bởi main_process/docker-compose.yml).
 
 services:
@@ -39,8 +39,38 @@ services:
     networks:
       - news-net
 
+  mongo:
+    image: mongo:7
+    container_name: news-mongo
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: bench
+      MONGO_INITDB_ROOT_PASSWORD: bench
+      MONGO_INITDB_DATABASE: news_bench
+    # Default WiredTiger + snappy compression — fair với CH/PG.
+    # Có thể đổi sang zstd để xem compression tốt hơn:
+    #   --wiredTigerCollectionBlockCompressor zstd
+    command:
+      - "mongod"
+      - "--bind_ip_all"
+      - "--wiredTigerCacheSizeGB"
+      - "0.5"
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "-u", "bench", "-p", "bench",
+             "--authenticationDatabase", "admin",
+             "--eval", "db.adminCommand('ping').ok"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks:
+      - news-net
+
 volumes:
   pg_data:
+  mongo_data:
 
 networks:
   news-net:

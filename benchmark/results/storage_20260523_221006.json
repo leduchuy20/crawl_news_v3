@@ -1,0 +1,151 @@
+{
+  "generated_at": "2026-05-23T22:10:06.635729",
+  "raw_jsonl_bytes": 917566473,
+  "snapshots": [
+    {
+      "engine": "Raw JSONL",
+      "entries": [
+        {
+          "table": "articles_ready*.jsonl",
+          "row_count": null,
+          "data_size": 917566473,
+          "index_size": 0,
+          "disk_size": 917566473
+        }
+      ],
+      "files": [
+        "../data\\articles_ready.jsonl",
+        "../data\\articles_ready_2026-05.jsonl",
+        "../data\\articles_ready_2026-05_2.jsonl",
+        "../data\\articles_ready_2026-05_3.jsonl",
+        "../data\\articles_ready_2026-05_4.jsonl",
+        "../data\\articles_ready_2026-05_5.jsonl",
+        "../data\\articles_ready_2026-05_6.jsonl",
+        "../data\\articles_ready_2026-05_7.jsonl",
+        "../data\\articles_ready_2026-05_8.jsonl",
+        "../data\\articles_ready_2026-05_9.jsonl"
+      ]
+    },
+    {
+      "engine": "PostgreSQL",
+      "entries": [
+        {
+          "table": "articles",
+          "row_count": 181112,
+          "data_size": 1346781184,
+          "index_size": 513490944,
+          "disk_size": 1860272128
+        },
+        {
+          "table": "entity_events",
+          "row_count": 3539416,
+          "data_size": 375365632,
+          "index_size": 24690688,
+          "disk_size": 400056320
+        },
+        {
+          "table": "keyword_events",
+          "row_count": 658807,
+          "data_size": 71860224,
+          "index_size": 43057152,
+          "disk_size": 114917376
+        }
+      ]
+    },
+    {
+      "engine": "MongoDB",
+      "entries": [
+        {
+          "table": "articles",
+          "row_count": 181083,
+          "data_size": 917974137,
+          "index_size": 670564352,
+          "disk_size": 1150791680,
+          "_storage_compressed": 480227328
+        },
+        {
+          "table": "keyword_events",
+          "row_count": 658807,
+          "data_size": 129984328,
+          "index_size": 32337920,
+          "disk_size": 60514304,
+          "_storage_compressed": 28176384
+        },
+        {
+          "table": "entity_events",
+          "row_count": 3539738,
+          "data_size": 704783843,
+          "index_size": 57593856,
+          "disk_size": 185307136,
+          "_storage_compressed": 127713280
+        }
+      ]
+    },
+    {
+      "engine": "Elasticsearch",
+      "entries": [
+        {
+          "table": "news_articles",
+          "row_count": 3720821,
+          "data_size": 880528840,
+          "index_size": 0,
+          "disk_size": 880528840,
+          "_note": "Lucene: data + inverted index bundled trong segments"
+        }
+      ]
+    },
+    {
+      "engine": "ClickHouse",
+      "entries": [
+        {
+          "table": "articles",
+          "row_count": 181083,
+          "data_size": 736212011,
+          "index_size": 4140,
+          "disk_size": 357987642,
+          "_compression_ratio": 2.0565291217510797
+        },
+        {
+          "table": "daily_entity_stats",
+          "row_count": 2183716,
+          "data_size": 58330263,
+          "index_size": 8708,
+          "disk_size": 29819252,
+          "_compression_ratio": 1.9561276386141409
+        },
+        {
+          "table": "daily_keyword_stats",
+          "row_count": 524614,
+          "data_size": 15393138,
+          "index_size": 2552,
+          "disk_size": 6989686,
+          "_compression_ratio": 2.2022645938601535
+        },
+        {
+          "table": "entity_events",
+          "row_count": 3539738,
+          "data_size": 221000839,
+          "index_size": 12901,
+          "disk_size": 109305554,
+          "_compression_ratio": 2.0218628506287977
+        },
+        {
+          "table": "hourly_keyword_stats",
+          "row_count": 638161,
+          "data_size": 19440109,
+          "index_size": 3253,
+          "disk_size": 8200947,
+          "_compression_ratio": 2.370471239480026
+        },
+        {
+          "table": "keyword_events",
+          "row_count": 658807,
+          "data_size": 44356235,
+          "index_size": 3384,
+          "disk_size": 19523422,
+          "_compression_ratio": 2.2719498149453514
+        }
+      ]
+    }
+  ]
+}

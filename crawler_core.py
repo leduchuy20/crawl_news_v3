@@ -132,7 +132,7 @@ class Article:
     keywords: List[str] = field(default_factory=list)
     entities: List[Dict[str, str]] = field(default_factory=list)  # sẽ populate ở bước NER
     content_length: int = 0
-    has_full_content: bool = False       # True nếu content >= 500 chars
+    has_full_content: bool = False       # True nếu content >= 300 chars
 
     def to_dict(self) -> Dict[str, Any]:
         d = asdict(self)

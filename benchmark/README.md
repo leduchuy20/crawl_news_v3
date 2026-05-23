@@ -1,6 +1,11 @@
-# Benchmark — Elasticsearch vs ClickHouse vs PostgreSQL
+# Benchmark — Elasticsearch vs ClickHouse vs PostgreSQL vs MongoDB
 
-So sánh hiệu năng 3 engine trên cùng dataset và cùng query, dùng làm số liệu cho báo cáo đề tài.
+So sánh hiệu năng + storage 4 engine trên cùng dataset và cùng query,
+dùng làm số liệu cho báo cáo đề tài.
+
+Có **2 nhóm benchmark độc lập**:
+- **Latency** (ES vs CH vs PG): `make run` → `make plot`
+- **Storage** (4 engines vs raw JSONL): `make storage-all`
 
 ## 📂 Files
 
@@ -197,3 +202,55 @@ Chạy `make load` trước `make run`.
 **Chart trông xấu:**
 - Thêm `--no-log` nếu không muốn log scale
 - Edit `ENGINE_COLORS` trong `03_plot_results.py` để đổi màu
+
+## 💾 Storage comparison (4 engines + raw JSONL)
+
+Đo dung lượng disk khi lưu **cùng dataset** vào PostgreSQL, MongoDB,
+Elasticsearch, ClickHouse, so với file JSONL gốc.
+
+### Cách chạy
+
+```bash
+# Prerequisites: ES + ClickHouse stack đã up (cd ../main_process && make all)
+#                Postgres đã load (make load)
+
+make up                # nếu chưa start postgres + mongo
+make load-mongo        # load JSONL vào MongoDB (3 collections + indexes)
+make storage           # đo size 4 engine → results/storage_<ts>.{json,csv,md}
+make plot-storage      # vẽ chart → chart_storage_total.png + chart_storage_breakdown.png
+
+# Hoặc gộp lại:
+make storage-all
+```
+
+### Metrics đo
+
+| Metric | Ý nghĩa |
+|---|---|
+| `data_size` | Data thô (uncompressed). PG = `pg_table_size`, Mongo = `collStats.size` (BSON), CH = `data_uncompressed_bytes`. |
+| `index_size` | Tổng size index/secondary structures. Mongo = `totalIndexSize`, PG = `pg_indexes_size`, CH = primary key in memory. |
+| `disk_size` | Disk usage **thực tế** sau compression. Đây là con số "thực" cho slide. |
+| `vs Raw` | Tỉ lệ `disk_size / raw_jsonl_size`. < 1 = engine nén tốt, > 1 = phồng vì index. |
+
+### Output
+
+**`results/storage_<ts>.md`** — bảng tổng + breakdown per table/collection
+**`results/chart_storage_total.png`** — stacked bar (data + index) per engine, baseline = raw JSONL
+**`results/chart_storage_breakdown.png`** — grouped bar disk size per table
+
+### Dự kiến kết quả (dataset ~70k articles, ~700MB raw JSONL)
+
+| Engine | Disk vs Raw | Lý do |
+|---|---:|---|
+| Raw JSONL | 1.00× | baseline |
+| ClickHouse | 0.3-0.5× | LZ4 columnar nén cực mạnh cho text lặp lại |
+| PostgreSQL | 1.8-2.5× | TOAST PGLZ + 4 GIN index (FTS, trigram, JSONB, array) phình |
+| MongoDB | 1.5-2.0× | WiredTiger snappy + BTree indexes |
+| Elasticsearch | 2.5-4.0× | Inverted index + doc_values + _source kép |
+
+### Notes về fair comparison
+
+- **Mongo và PG cùng 3 collection/table** (articles + keyword_events + entity_events) → so trực tiếp được.
+- **ES không có analog cho keyword_events/entity_events** (analytics dùng aggregation runtime) → chỉ đo `news_articles`.
+- **CH 3 table** giống PG, dùng partition by `toYYYYMM(publish_date)`.
+- **Lucene không tách data vs index** → ES `index_size` = 0, tất cả gộp vào `data_size`/`disk_size`.

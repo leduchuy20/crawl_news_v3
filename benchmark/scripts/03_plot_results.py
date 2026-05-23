@@ -192,18 +192,34 @@ def plot_speedup_vs_postgres(rows: List[Dict], out_path: str):
     print(f"  ✓ {out_path}")
 
 
+def find_latest(pattern: str) -> str:
+    import glob as _glob
+    files = _glob.glob(pattern)
+    if not files:
+        return ""
+    return max(files, key=os.path.getmtime)
+
+
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--csv", required=True)
+    ap.add_argument("--csv", default=None,
+                    help="Path to benchmark_<ts>.csv. Default: file mới nhất "
+                         "trong results/benchmark_*.csv")
     ap.add_argument("--outdir", default=None, help="Default: same folder as CSV")
     ap.add_argument("--no-log", action="store_true", help="Disable log scale")
     args = ap.parse_args()
 
-    outdir = args.outdir or os.path.dirname(os.path.abspath(args.csv))
+    csv_path = args.csv or find_latest("results/benchmark_*.csv")
+    if not csv_path:
+        print("ERROR: no --csv given và không tìm thấy results/benchmark_*.csv",
+              file=sys.stderr)
+        sys.exit(1)
+
+    outdir = args.outdir or os.path.dirname(os.path.abspath(csv_path))
     os.makedirs(outdir, exist_ok=True)
 
-    rows = load_csv(args.csv)
-    print(f"Loaded {len(rows)} rows from {args.csv}")
+    rows = load_csv(csv_path)
+    print(f"Loaded {len(rows)} rows from {csv_path}")
     print()
     print("Rendering charts...")
 
