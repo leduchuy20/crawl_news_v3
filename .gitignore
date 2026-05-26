@@ -19,3 +19,7 @@ Thumbs.db
 .claude/
 
 data/articles_ready*.jsonl
+
+
+data/articles_ner_2026-05*.jsonl
+data/articles_ner_2026-04*.jsonl
