@@ -12,8 +12,9 @@ on:
         required: false
         default: ""
 
+# Không còn push data về git -> chỉ cần đọc code.
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: crawl
@@ -26,15 +27,15 @@ jobs:
 
     env:
       PYTHONIOENCODING: utf-8
+      # Dataset lưu trên Hugging Face thay vì git (tránh repo phình to).
+      # ĐỔI 'huyleduc' thành username Hugging Face thật của bạn nếu khác.
+      HF_REPO_ID: huyleduc/crawl-news-vn
+      HF_PRIVATE: "1"
+      HF_TOKEN: ${{ secrets.HF_TOKEN }}
 
     steps:
-      - name: Checkout
+      - name: Checkout (code only, shallow)
         uses: actions/checkout@v4
-        with:
-          # Fetch full history để push không bị conflict
-          fetch-depth: 0
-          # Dùng PAT hoặc GITHUB_TOKEN default để có thể push
-          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Setup Python
         uses: actions/setup-python@v5
@@ -46,6 +47,13 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
+          pip install "huggingface_hub>=0.24"
+
+      # Tải state cũ từ HF về data/ TRƯỚC khi chạy pipeline.
+      # Bắt buộc để: NER incremental skip ID đã NER, crawler resume + dedup
+      # qua checkpoint_*.json. Lần chạy đầu (repo HF chưa có) sẽ bỏ qua an toàn.
+      - name: Pull dataset state from Hugging Face
+        run: python hf_sync.py pull
 
       - name: Run crawler pipeline
         run: |
@@ -55,21 +63,10 @@ jobs:
             python run_all.py
           fi
 
-      - name: Commit & push data
-        run: |
-          git config user.name  "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          # Commit cả cleaned + ner partitions (multi-partition với rotation 89MB)
-          git add data/*.jsonl data/*.json 2>/dev/null || true
-          if git diff --cached --quiet; then
-            echo "No data changes to commit."
-            exit 0
-          fi
-          TS=$(date -u +"%Y-%m-%d %H:%M UTC")
-          git commit -m "chore(data): daily crawl $TS [skip ci]"
-          # Pull rebase + autostash: nếu còn file unstaged (log, tmp) thì stash tự động.
-          git pull --rebase --autostash origin ${GITHUB_REF_NAME} || true
-          git push origin HEAD:${GITHUB_REF_NAME}
+      # Đẩy state mới (articles_ner* + checkpoint_*) lên HF.
+      - name: Push dataset to Hugging Face
+        if: always()  # vẫn push state đã crawl được kể cả khi pipeline lỗi giữa chừng
+        run: python hf_sync.py push -m "daily crawl $(date -u +'%Y-%m-%d %H:%M UTC')"
 
       - name: Upload logs (artifact, 7 ngày)
         if: always()
