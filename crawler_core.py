@@ -304,15 +304,32 @@ class HttpClient:
         "Sec-Fetch-User": "?1",
     }
 
+    # Status code coi là "bị chặn" -> tính vào circuit breaker.
+    # Cố tình KHÔNG gồm 404/410 (bài không tồn tại, không phải do domain chặn).
+    BLOCK_STATUS = {403, 408, 425, 428, 429, 500, 502, 503, 504}
+
     def __init__(
         self,
         timeout: int = 25,
+        connect_timeout: int = 8,
         min_delay_per_domain: float = 0.5,
         jitter: float = 0.3,
         extra_headers: Optional[Dict[str, str]] = None,
+        circuit_threshold: int = 6,
     ):
-        self.timeout = timeout
+        # Tách timeout: (connect, read). Khi IP bị chặn, connect treo tới hết 25s là phí;
+        # connect_timeout=8s cho fail sớm, read=timeout vẫn rộng cho trang nặng.
+        self.timeout = (connect_timeout, timeout)
         self.rate_limiter = PerDomainRateLimiter(min_delay=min_delay_per_domain, jitter=jitter)
+
+        # --- Circuit breaker theo domain ---
+        # Sau `circuit_threshold` lần fail-kiểu-chặn LIÊN TIẾP ở 1 domain -> "mở cầu dao":
+        # skip ngay mọi URL còn lại của domain đó trong run này (reset ở lần chạy sau, vì
+        # HttpClient tạo mới mỗi run). Tránh đốt 5.5h GHA retry vô vọng vào dantri.
+        self.circuit_threshold = circuit_threshold
+        self._fail_counts: Dict[str, int] = defaultdict(int)
+        self._tripped: set = set()
+        self._circuit_lock = threading.Lock()
 
         self.session = requests.Session()
         headers = dict(self.DEFAULT_HEADERS)
@@ -336,13 +353,39 @@ class HttpClient:
         self.session.mount("http://", adapter)
         self.session.mount("https://", adapter)
 
+    def _record_failure(self, domain: str, reason: str = ""):
+        """Tăng đếm fail; vượt ngưỡng -> mở cầu dao cho domain."""
+        with self._circuit_lock:
+            self._fail_counts[domain] += 1
+            n = self._fail_counts[domain]
+            if n >= self.circuit_threshold and domain not in self._tripped:
+                self._tripped.add(domain)
+                log.warning(
+                    f"[circuit-breaker] {domain}: fail {n} lần liên tiếp ({reason}) "
+                    f"-> SKIP toàn bộ URL còn lại của domain này trong run."
+                )
+
+    def _record_success(self, domain: str):
+        """Có response hợp lệ -> reset đếm fail (chuỗi fail bị ngắt)."""
+        if self._fail_counts.get(domain):
+            with self._circuit_lock:
+                self._fail_counts[domain] = 0
+
     def get(self, url: str, **kwargs) -> Optional[requests.Response]:
-        """GET có rate limit + xử lý cookie challenge của laodong.vn."""
+        """GET có rate limit + circuit breaker + xử lý cookie challenge của laodong.vn."""
+        domain = get_domain(url)
+
+        # Cầu dao đang mở cho domain này -> skip ngay, khỏi tốn connect/retry.
+        with self._circuit_lock:
+            if domain in self._tripped:
+                return None
+
         self.rate_limiter.wait(url)
         try:
             r = self.session.get(url, timeout=self.timeout, allow_redirects=True, **kwargs)
         except requests.RequestException as e:
             log.warning(f"GET failed {url}: {e}")
+            self._record_failure(domain, reason="connect/timeout")
             return None
 
         # laodong.vn: cookie challenge
@@ -359,11 +402,17 @@ class HttpClient:
                         r = self.session.get(url, timeout=self.timeout, allow_redirects=True, **kwargs)
                     except requests.RequestException as e:
                         log.warning(f"GET retry failed {url}: {e}")
+                        self._record_failure(domain, reason="connect/timeout")
                         return None
 
         if r.status_code >= 400:
             log.warning(f"HTTP {r.status_code} on {url}")
+            if r.status_code in self.BLOCK_STATUS:
+                self._record_failure(domain, reason=f"HTTP {r.status_code}")
             return None
+
+        # Response hợp lệ -> ngắt chuỗi fail của domain.
+        self._record_success(domain)
         return r
 
     def get_text(self, url: str, extra_headers: Optional[Dict[str, str]] = None) -> Optional[str]:
