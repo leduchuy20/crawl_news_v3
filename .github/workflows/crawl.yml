@@ -49,11 +49,12 @@ jobs:
           pip install -r requirements.txt
           pip install "huggingface_hub>=0.24"
 
-      # Tải state cũ từ HF về data/ TRƯỚC khi chạy pipeline.
-      # Bắt buộc để: NER incremental skip ID đã NER, crawler resume + dedup
-      # qua checkpoint_*.json. Lần chạy đầu (repo HF chưa có) sẽ bỏ qua an toàn.
+      # Tải TOÀN BỘ data cũ từ HF về data/ TRƯỚC khi chạy pipeline (--all).
+      # Bắt buộc để: NER incremental skip ID đã NER, crawler resume + dedup qua
+      # checkpoint_*.json, VÀ file thô rss/html tích lũy qua từng ngày (không pull
+      # thì mỗi run chỉ có data của run đó). Lần chạy đầu (repo HF chưa có) bỏ qua an toàn.
       - name: Pull dataset state from Hugging Face
-        run: python hf_sync.py pull
+        run: python hf_sync.py pull --all
 
       - name: Run crawler pipeline
         run: |
@@ -63,10 +64,11 @@ jobs:
             python run_all.py
           fi
 
-      # Đẩy state mới (articles_ner* + checkpoint_*) lên HF.
+      # Đẩy TOÀN BỘ data lên HF (--all): articles_ner* + checkpoint_* + file thô
+      # rss/html/final/cleaned → backup đầy đủ từng stage.
       - name: Push dataset to Hugging Face
         if: always()  # vẫn push state đã crawl được kể cả khi pipeline lỗi giữa chừng
-        run: python hf_sync.py push -m "daily crawl $(date -u +'%Y-%m-%d %H:%M UTC')"
+        run: python hf_sync.py push --all -m "daily crawl $(date -u +'%Y-%m-%d %H:%M UTC')"
 
       - name: Upload logs (artifact, 7 ngày)
         if: always()
