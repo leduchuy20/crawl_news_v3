@@ -68,14 +68,22 @@ Tài liệu 1 trang: chạy toàn bộ hệ thống từ **crawl tin tức** →
 
 Chạy ở root `crawl_news_v2`.
 
+> **Data ở Hugging Face, KHÔNG ở git.** `data/` đã gitignore. Trước khi chạy/dev ở local,
+> `pull` state cũ về để NER incremental + crawler resume; chạy xong `push` lên lại.
+
 **Lần đầu** — cài Python deps:
 ```bash
 pip install -r requirements.txt
+pip install "huggingface_hub>=0.24"          # cho hf_sync.py
+export HF_TOKEN=hf_xxx                        # PowerShell: $env:HF_TOKEN="hf_xxx"
+export HF_REPO_ID=huyleduc/crawl-news-vn      # đổi cho khớp username HF của bạn
 ```
 
 **Chạy full:**
 ```bash
-python run_all.py
+python hf_sync.py pull                        # tải articles_ner* + checkpoint_* từ HF
+python run_all.py                             # crawl + cleanup + NER (incremental)
+python hf_sync.py push                        # đẩy state mới lên HF
 ```
 
 Hoặc từng bước tách riêng để debug:
@@ -88,6 +96,10 @@ python pre_dataset/02_ner.py --workers 4
 ```
 
 Output: [data/](data/) có `articles_ner*.jsonl` (multi-partition, tự rotate ~89MB).
+
+> ⚠️ **LUÔN `pull` trước `push`**: push ghi đè file HF theo tên, push từ `data/` trống sẽ
+> xoá data trên HF. Crawler có **circuit breaker** + **bucket 4h** — nếu một báo (vd dantri)
+> bị chặn IP thì tự skip, không treo run. Chi tiết ở `CLAUDE.md` / `HF_MIGRATION.md`.
 
 ---
 
@@ -426,7 +438,10 @@ docker restart news-es
 | `PartiallyConsumedQueryError: Simultaneous queries` | CH client share connection — đã fix ở [kb3/backend/deps/clients.py](kb3/backend/deps/clients.py) (fresh client / request) |
 | `422 Unprocessable Entity` khi gọi `/trends/cross-source?days=90` | Đã fix raise `le=60` → `le=365` |
 | `ModuleNotFoundError: backend` | Thiếu `PYTHONPATH=.` — set trước khi chạy uvicorn |
-| `no input files matched` ở Stage 2 | Chưa có NER output — chạy Stage 1 trước |
+| `no input files matched` ở Stage 2 | Chưa có NER output — chạy Stage 1 (`hf_sync.py pull` hoặc `run_all.py`) trước |
+| `hf_sync.py` báo thiếu `HF_TOKEN` | `export HF_TOKEN=hf_xxx` (bash) / `$env:HF_TOKEN="hf_xxx"` (PowerShell), token Write |
+| NER chạy lại từ đầu (~4h) mỗi run | Quên `hf_sync.py pull` trước `run_all.py` → mất state, re-NER toàn bộ |
+| `HTTP 428` / connect timeout `dantri` | IP datacenter bị chặn. Circuit breaker tự skip; muốn đủ data chạy từ IP VN (self-hosted runner / cron local) |
 | ES OOM hoặc chậm | Giảm heap ở [main_process/docker-compose.yml](main_process/docker-compose.yml): `ES_JAVA_OPTS=-Xms512m -Xmx512m` |
 | Port 8000/8080/9200/5601/9000 bị chiếm | `docker-compose down` stack cũ, hoặc đổi port trong compose |
 | Frontend gọi API bị CORS / network error | Mở Settings drawer (avatar góc phải) → sửa **API URL** cho đúng backend |
@@ -440,8 +455,10 @@ docker restart news-es
 ## TL;DR — lệnh chạy hằng ngày
 
 ```bash
-# 1. (optional) Crawl + NER nếu có tin mới
+# 1. (optional) Crawl + NER nếu có tin mới (data lưu trên Hugging Face)
+python hf_sync.py pull               # cần HF_TOKEN + HF_REPO_ID
 python run_all.py
+python hf_sync.py push
 
 # 2. Index + analytics
 cd main_process
