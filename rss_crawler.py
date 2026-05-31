@@ -381,15 +381,15 @@ def run_rss_crawler(
     total = {"fetched": 0, "added": 0, "skipped_dup": 0, "skipped_old": 0, "skipped_invalid": 0}
     progress = SimpleProgress(total=len(feeds), log_every=5, label="rss_feeds")
 
-    # Gắn bucket 6 tiếng UTC vào checkpoint key → chỉ skip feed đã crawl TRONG 6H GẦN ĐÂY.
-    # Sang bucket mới (00/06/12/18 UTC) key đổi → crawler quét lại; dedup vẫn qua JsonlStore.
+    # Gắn bucket 4 tiếng UTC vào checkpoint key → chỉ skip feed đã crawl TRONG 4H GẦN ĐÂY.
+    # Sang bucket mới (00/04/08/12/16/20 UTC) key đổi → crawler quét lại; dedup vẫn qua JsonlStore.
     _now = datetime.now(timezone.utc)
-    bucket = _now.strftime("%Y-%m-%d") + f"T{(_now.hour // 6) * 6:02d}"
+    bucket = _now.strftime("%Y-%m-%d") + f"T{(_now.hour // 4) * 4:02d}"
 
     for i, feed_url in enumerate(feeds, 1):
         ckpt_key = f"feed:{bucket}:{feed_url}"
         if checkpoint.is_done(ckpt_key):
-            logger.info(f"[{i}/{len(feeds)}] SKIP (already done in last 6h): {feed_url}")
+            logger.info(f"[{i}/{len(feeds)}] SKIP (already done in last 4h): {feed_url}")
             progress.tick()
             continue
 

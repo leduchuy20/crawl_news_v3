@@ -357,10 +357,10 @@ def run_html_crawler(
 
     grand_total = {"added": 0, "dup": 0, "invalid": 0, "fetch_failed": 0, "too_old": 0, "pages_visited": 0}
 
-    # Gắn bucket 6 tiếng UTC vào checkpoint key → chỉ skip category đã crawl TRONG 6H GẦN ĐÂY.
-    # Sang bucket mới (00/06/12/18 UTC) key đổi → crawler chạy lại; dedup vẫn qua JsonlStore.
+    # Gắn bucket 4 tiếng UTC vào checkpoint key → chỉ skip category đã crawl TRONG 4H GẦN ĐÂY.
+    # Sang bucket mới (00/04/08/12/16/20 UTC) key đổi → crawler chạy lại; dedup vẫn qua JsonlStore.
     _now = datetime.now(timezone.utc)
-    bucket = _now.strftime("%Y-%m-%d") + f"T{(_now.hour // 6) * 6:02d}"
+    bucket = _now.strftime("%Y-%m-%d") + f"T{(_now.hour // 4) * 4:02d}"
 
     for site_domain in sites:
         if site_domain not in SITE_CONFIG:
@@ -380,7 +380,7 @@ def run_html_crawler(
         for cat_url in config["category_pages"]:
             ckpt_key = f"cat:{bucket}:{cat_url}"
             if checkpoint.is_done(ckpt_key):
-                logger.info(f"  SKIP (already done in last 6h): {cat_url}")
+                logger.info(f"  SKIP (already done in last 4h): {cat_url}")
                 continue
             try:
                 stats = crawl_category(
