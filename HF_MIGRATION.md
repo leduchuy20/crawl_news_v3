@@ -1,7 +1,7 @@
 # Chuyển dataset từ Git → Hugging Face
 
 Mục tiêu: ngừng commit dataset vào git (repo `.git` đã phình **6.9GB**), chuyển sang
-lưu trên Hugging Face Dataset `huyleduc/crawl-news-vn` (private). Crawl daily không
+lưu trên Hugging Face Dataset `ledhuy/crawl_news_vn` (private). Crawl daily không
 còn bị giới hạn lưu trữ của GitHub.
 
 Có **3 việc**: (1) cấu hình HF token, (2) migrate data hiện có lên HF, (3) dọn lịch
@@ -14,11 +14,11 @@ sử git để thu hồi 6.9GB.
 1. Vào <https://huggingface.co/settings/tokens> → **New token** → quyền **Write**.
 2. Trong repo GitHub: **Settings → Secrets and variables → Actions → New repository
    secret**:
-   - Name: `HF_TOKEN`
+   - Name: `CRAWL_NEWS_VN`
    - Value: token vừa tạo.
 
-Workflow `.github/workflows/crawl.yml` đã đọc `secrets.HF_TOKEN` sẵn. Repo-id để mặc
-định `huyleduc/crawl-news-vn` (đổi qua env `HF_REPO_ID` nếu muốn).
+Workflow `.github/workflows/crawl.yml` map `secrets.CRAWL_NEWS_VN` → env `HF_TOKEN` sẵn.
+Repo-id để mặc định `ledhuy/crawl_news_vn` (đổi qua env `HF_REPO_ID` nếu muốn).
 
 > Lưu ý private: free tier HF cho **public** dataset là 1TB, còn **private** quota nhỏ
 > hơn nhiều. Dataset của bạn vài trăm MB nên thoải mái, nhưng nếu sau này phình to
@@ -32,7 +32,7 @@ Workflow `.github/workflows/crawl.yml` đã đọc `secrets.HF_TOKEN` sẵn. Rep
 pip install "huggingface_hub>=0.24"
 
 export HF_TOKEN=hf_xxx                       # token Write
-export HF_REPO_ID=huyleduc/crawl-news-vn
+export HF_REPO_ID=ledhuy/crawl_news_vn
 export HF_PRIVATE=1
 
 # Đẩy state nóng (articles_ner* + checkpoint_*) — đủ cho pipeline chạy tiếp:
@@ -45,11 +45,11 @@ python hf_sync.py push --all
 PowerShell:
 
 ```powershell
-$env:HF_TOKEN="hf_xxx"; $env:HF_REPO_ID="huyleduc/crawl-news-vn"; $env:HF_PRIVATE="1"
+$env:HF_TOKEN="hf_xxx"; $env:HF_REPO_ID="ledhuy/crawl_news_vn"; $env:HF_PRIVATE="1"
 python hf_sync.py push
 ```
 
-Kiểm tra: mở <https://huggingface.co/datasets/huyleduc/crawl-news-vn> → tab **Files**.
+Kiểm tra: mở <https://huggingface.co/datasets/ledhuy/crawl_news_vn> → tab **Files**.
 
 Test pull ngược (vào thư mục trống hoặc máy khác):
 

@@ -16,7 +16,7 @@ Dùng:
 
 Env:
     HF_TOKEN     (bắt buộc khi push, và khi pull repo private)
-    HF_REPO_ID   (mặc định: huyleduc/crawl-news-vn)
+    HF_REPO_ID   (mặc định: ledhuy/crawl_news_vn)
     HF_PRIVATE   (mặc định: 1 -> tạo repo private)
 """
 from __future__ import annotations
@@ -25,13 +25,73 @@ import argparse
 import glob
 import gzip
 import os
+import random
 import shutil
 import sys
 import tempfile
+import time
 
-DEFAULT_REPO_ID = "huyleduc/crawl-news-vn"
+DEFAULT_REPO_ID = "ledhuy/crawl_news_vn"
 DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")
 GZIP_LEVEL = 6
+
+# Retry cho call mạng tới HF. IP datacenter của GitHub Actions dùng chung dải -> hay bị
+# 429 Too Many Requests. Lùi theo cấp số nhân + jitter, tôn trọng header Retry-After.
+HF_MAX_RETRIES = int(os.environ.get("HF_MAX_RETRIES", "6"))
+HF_BACKOFF_BASE = float(os.environ.get("HF_BACKOFF_BASE", "5"))   # giây
+HF_BACKOFF_CAP = float(os.environ.get("HF_BACKOFF_CAP", "120"))  # trần mỗi lần chờ
+# Giảm số luồng tải để hạ tần suất request (mặc định hf là 8) -> ít bị rate-limit hơn.
+HF_MAX_WORKERS = int(os.environ.get("HF_MAX_WORKERS", "2"))
+
+
+def _retry_status(exc) -> int | None:
+    """Lấy HTTP status từ exception của huggingface_hub/requests nếu có."""
+    resp = getattr(exc, "response", None)
+    return getattr(resp, "status_code", None) if resp is not None else None
+
+
+def _retry_after(exc) -> float | None:
+    resp = getattr(exc, "response", None)
+    if resp is None:
+        return None
+    val = resp.headers.get("Retry-After") if getattr(resp, "headers", None) else None
+    try:
+        return float(val) if val is not None else None
+    except (TypeError, ValueError):
+        return None
+
+
+def _with_retry(fn, *args, what: str = "HF op", **kwargs):
+    """Gọi fn(*args, **kwargs), retry khi gặp 429/5xx hoặc lỗi kết nối tạm thời."""
+    from huggingface_hub.utils import HfHubHTTPError
+    try:
+        from requests.exceptions import ConnectionError as ReqConnErr, Timeout as ReqTimeout
+        conn_errs = (ReqConnErr, ReqTimeout)
+    except Exception:  # requests luôn có sẵn cùng hf_hub, nhưng phòng hờ
+        conn_errs = ()
+
+    attempt = 0
+    while True:
+        attempt += 1
+        try:
+            return fn(*args, **kwargs)
+        except HfHubHTTPError as e:
+            status = _retry_status(e)
+            retryable = status == 429 or (status is not None and 500 <= status < 600)
+            if not retryable or attempt > HF_MAX_RETRIES:
+                raise
+            wait = _retry_after(e)
+        except conn_errs:
+            if attempt > HF_MAX_RETRIES:
+                raise
+            wait = None
+
+        if wait is None:
+            wait = min(HF_BACKOFF_CAP, HF_BACKOFF_BASE * (2 ** (attempt - 1)))
+            wait += random.uniform(0, wait * 0.25)   # jitter chống đồng bộ
+        print(f"[hf_sync] {what}: rate-limited/lỗi tạm thời, retry "
+              f"{attempt}/{HF_MAX_RETRIES} sau {wait:.0f}s...", file=sys.stderr)
+        time.sleep(wait)
 
 # File JSONL "nóng" cần giữ trạng thái (NER đắt đỏ). Đuôi `.jsonl*` bắt cả .jsonl lẫn .jsonl.gz.
 CORE_JSONL = ["articles_ner*.jsonl*"]
@@ -114,8 +174,9 @@ def cmd_push(args) -> int:
             return 0
 
         api = HfApi()
-        _ensure_repo(api, repo_id)
-        api.upload_folder(
+        _with_retry(_ensure_repo, api, repo_id, what="create_repo")
+        _with_retry(
+            api.upload_folder,
             folder_path=staging,
             repo_id=repo_id,
             repo_type="dataset",
@@ -123,6 +184,7 @@ def cmd_push(args) -> int:
             token=_token(),
             # Dọn bản .jsonl thô cũ trên HF (nếu lần đầu lỡ push chưa nén) -> chỉ giữ .gz.
             delete_patterns=["*.jsonl"],
+            what="upload_folder",
         )
         print(f"[hf_sync] pushed {n_gz} jsonl(.gz) + {n_json} json -> {repo_id}")
         return 0
@@ -142,8 +204,9 @@ def cmd_pull(args) -> int:
     staging = tempfile.mkdtemp(prefix="hf_pull_")
     try:
         try:
-            snapshot_download(repo_id=repo_id, repo_type="dataset", local_dir=staging,
-                              allow_patterns=allow, token=_token())
+            _with_retry(snapshot_download, repo_id=repo_id, repo_type="dataset",
+                        local_dir=staging, allow_patterns=allow, token=_token(),
+                        max_workers=HF_MAX_WORKERS, what="snapshot_download")
         except RepositoryNotFoundError:
             print(f"[hf_sync] repo {repo_id} chưa tồn tại, bỏ qua pull (first run).")
             return 0

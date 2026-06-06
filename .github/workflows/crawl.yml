@@ -28,7 +28,7 @@ jobs:
     env:
       PYTHONIOENCODING: utf-8
       # Dataset lưu trên Hugging Face thay vì git (tránh repo phình to).
-      # ĐỔI 'huyleduc' thành username Hugging Face thật của bạn nếu khác.
+      # ĐỔI thành username/repo Hugging Face thật của bạn nếu khác.
       HF_REPO_ID: ledhuy/crawl_news_vn
       HF_PRIVATE: "1"
       HF_TOKEN: ${{ secrets.CRAWL_NEWS_VN }}

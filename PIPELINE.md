@@ -76,7 +76,7 @@ Chạy ở root `crawl_news_v2`.
 pip install -r requirements.txt
 pip install "huggingface_hub>=0.24"          # cho hf_sync.py
 export HF_TOKEN=hf_xxx                        # PowerShell: $env:HF_TOKEN="hf_xxx"
-export HF_REPO_ID=huyleduc/crawl-news-vn      # đổi cho khớp username HF của bạn
+export HF_REPO_ID=ledhuy/crawl_news_vn        # đổi cho khớp username HF của bạn
 ```
 
 **Chạy full:**
